@@ -45,7 +45,7 @@ def get_refs(l):
     for ref in reflist:
         # ref_str += "    {},\n".format(ref)
         if refCount == 0:
-            ref_str += " {}\n".format(ref + " Refs = iota") 
+            ref_str += " {}\n".format(ref + " int = iota") 
         else:
             ref_str += "    {}\n".format(ref)
 

@@ -38,8 +38,8 @@ type String_Group_t struct {{
 type Object_t struct {{
   Words String_Group_t
   Inventory string
-  Plac Refs // Location
-  Fixd Refs // Location
+  Plac int // Location
+  Fixd int // Location
   Is_Treasure bool
   Descriptions []string
   Sounds []string
@@ -54,7 +54,7 @@ type Descriptions_t struct {{
 
 type Location_t struct {{
   Description Descriptions_t
-  Sound Refs // arbitrary_messages
+  Sound int // arbitrary_messages
   Loud bool
 }}
 
@@ -109,9 +109,9 @@ const (
 )
 
 type Travelop_t struct {{
-  Motion Refs
+  Motion int
   CondType CondType
-  CondArg1 Refs
+  CondArg1 int
   CondArg2 int64
   DestType DestType
   DestVal  interface{{}} //Location_Refs
