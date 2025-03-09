@@ -82,7 +82,8 @@ func NewGame() Game {
 	}
 
 	for i := 0; i < 5; i++ {
-		newGame.Zzword[i] = byte('A' + (26 + getNextLCGValue(newGame.LcgX)%LCG_M))
+		newGame.LcgX = getNextLCGValue(newGame.LcgX)
+		newGame.Zzword[i] = byte('A' + (26 * newGame.LcgX / LCG_M))
 	}
 
 	newGame.Zzword[1] = '\''
