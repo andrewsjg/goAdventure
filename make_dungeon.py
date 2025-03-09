@@ -40,9 +40,16 @@ def make_c_string(string):
 def get_refs(l):
     reflist = [x[0] for x in l]
     ref_str = ""
+    refCount = 0
+
     for ref in reflist:
         # ref_str += "    {},\n".format(ref)
-        ref_str += "    {}\n".format(ref)
+        if refCount == 0:
+            ref_str += " {}\n".format(ref + " Refs = iota") 
+        else:
+            ref_str += "    {}\n".format(ref)
+
+        refCount += 1
     ref_str = ref_str[:-1]  # trim trailing newline 
     return ref_str
 
@@ -69,11 +76,16 @@ def get_arbitrary_messages(arb):
     template = """    {},
 """
     arb_str = ""
+    
     for item in arb:
+      
         if item[1] is None:
             arb_str += "\"\",\n"
         else:
             arb_str += template.format(make_c_string(item[1]))
+        
+      
+
     arb_str = arb_str[:-1]  # trim trailing newline
     return arb_str
 

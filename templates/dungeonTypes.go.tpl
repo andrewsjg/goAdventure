@@ -28,6 +28,8 @@ const COND_HOGRE	= 20	/* Trying to deal with ogre */
 const COND_HJADE	= 21	/* Found all treasures except jade */
 const NDWARVES    =  {ndwarflocs}          // number of dwarves
 
+type Refs int
+
 type String_Group_t struct {{
   Strs []string
   N int
@@ -36,8 +38,8 @@ type String_Group_t struct {{
 type Object_t struct {{
   Words String_Group_t
   Inventory string
-  Plac Location_Refs
-  Fixd Location_Refs
+  Plac Refs // Location
+  Fixd Refs // Location
   Is_Treasure bool
   Descriptions []string
   Sounds []string
@@ -52,7 +54,7 @@ type Descriptions_t struct {{
 
 type Location_t struct {{
   Description Descriptions_t
-  Sound Arbitrary_Messages_Refs
+  Sound Refs // arbitrary_messages
   Loud bool
 }}
 
@@ -107,9 +109,9 @@ const (
 )
 
 type Travelop_t struct {{
-  Motion Motion_Refs
+  Motion Refs
   CondType CondType
-  CondArg1 Object_Refs
+  CondArg1 Refs
   CondArg2 int64
   DestType DestType
   DestVal  interface{{}} //Location_Refs
@@ -130,33 +132,25 @@ const NKEYS	= 	{num_keys}
 
 const BIRD_ENDSTATE = {bird_endstate}
 
-type Arbitrary_Messages_Refs int
 const (
-   MSGS Arbitrary_Messages_Refs = iota
    {arbitrary_messages}
 )
 
-type Location_Refs int
 const (
-  LOCS Location_Refs = iota
   {locations}
 )
 
-type Object_Refs int
+
 const (
-  OBJS Object_Refs = iota
   {objects}
 )
 
-type Motion_Refs int
 const (
-  MOT Motion_Refs = iota
   {motions}
 )
 
-type Action_Refs int
+
 const (
-  ACT Action_Refs = iota
   {actions}
 )
 

@@ -52,6 +52,6 @@ var Ignore string = "{ignore}"
 
 
 /* Dwarf starting locations */
-var dwarflocs = [NDWARVES]Location_Refs{{{dwarflocs}}}
+var dwarflocs = [NDWARVES]Refs{{{dwarflocs}}} //location
 
 /* end */

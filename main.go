@@ -3,13 +3,19 @@ package main
 import (
 	"fmt"
 
-	"github.com/andrewsjg/goAdventure/dungeon"
+	"github.com/andrewsjg/goAdventure/advent"
 )
+
+var ADVENT_AUTOSAVE = true
 
 func main() {
 
-	for _, msg := range dungeon.Arbitrary_Messages {
-		fmt.Printf("MSG: %s\n\n", msg)
-	}
+	// TODO: Implement autosave logic
+
+	// TODO: Implement command line argument handling
+
+	game := advent.NewGame()
+
+	fmt.Println(string(game.Zzword[:]))
 
 }
