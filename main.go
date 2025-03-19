@@ -14,8 +14,9 @@ func main() {
 
 	// TODO: Implement command line argument handling
 
-	game := advent.NewGame()
+	game := advent.NewGame(0)
 
-	fmt.Println(string(game.Zzword[:]))
+	fmt.Println("ZZWORD:  " + string(game.Zzword[:]))
+	fmt.Printf("Seedval: %d\n", game.Seedval)
 
 }

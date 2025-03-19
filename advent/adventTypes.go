@@ -41,6 +41,7 @@ type Game struct {
 	Seenbigwords bool
 	Trnluz       int32
 	Turns        int32
+	Seedval      int
 	Zzword       [5 + 1]byte
 	Locs         [dungeon.NLOCATIONS + 1]struct {
 		Abbrev int32
@@ -68,4 +69,41 @@ const (
 	LCG_A = 1093
 	LCG_C = 221587
 	LCG_M = 1048576
+
+	CARRIED        = -1
+	STATE_NOTFOUND = -1
+	STATE_FOUND    = 0
 )
+
+func (g *Game) Drop(object, where int32) {
+
+	/*  Place an object at a given loc, prefixing it onto the game atloc
+	 * list.  Decr game.holdng if the object was being toted. No state
+	 * change on the object. */
+
+	if object > dungeon.NOBJECTS {
+		g.Objects[object-dungeon.NOBJECTS].Fixed = where
+	} else {
+		if g.Objects[object].Place == CARRIED {
+			if object != int32(dungeon.BIRD) {
+				/* The bird has to be weightless.  This ugly
+				 * hack (and the corresponding code in the carry
+				 * function) brought to you by the fact that
+				 * when the bird is caged, we need to be able to
+				 * either 'take bird' or 'take cage' and have
+				 * the right thing happen.
+				 */
+				g.Holdng--
+			}
+			g.Objects[object].Place = where
+		}
+
+		if where == int32(dungeon.LOC_NOWHERE) || where == CARRIED {
+			return
+		}
+
+		g.Link[object] = g.Locs[where].Atloc
+		g.Locs[where].Atloc = object
+
+	}
+}

@@ -11,10 +11,8 @@ Based off Eric S. Raymond's C Port: https://gitlab.com/esr/open-adventure
 - [ ] Autosave Logic
 - [ ] Command line handling
 - [ ] TUI
+- [x] Game Init
 - [x] Go Dungeon Templates
 - [x] Adapt make_python.py
-
-
-
 
 
