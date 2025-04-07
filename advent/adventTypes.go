@@ -63,6 +63,8 @@ type Game struct {
 		Lc   int32
 	}
 	Link [dungeon.NOBJECTS*2 + 1]int32
+
+	Settings Settings
 }
 
 const (
@@ -73,7 +75,30 @@ const (
 	CARRIED        = -1
 	STATE_NOTFOUND = -1
 	STATE_FOUND    = 0
+
+	ADVENT_MAGIC = "goAdventure\n"
+	SAVE_VERSION = 1
+
+	NOVICELIMIT = 1000
 )
+
+type Save struct {
+	Magic   string
+	Version int
+	Canary  int
+	Game    Game
+}
+
+type Settings struct {
+	Autosave         bool
+	NewGame          bool
+	LogFileName      string
+	OldStyle         bool
+	AutoSaveFileName string
+	RestoreFileName  string
+	EnableDebug      bool
+	Scripts          []string
+}
 
 func (g *Game) Drop(object, where int32) {
 
