@@ -3,6 +3,7 @@ package advent
 import "github.com/andrewsjg/goAdventure/dungeon"
 
 type Game struct {
+	Output       string
 	LcgX         int32
 	Abbnum       int32
 	Bonus        int32
@@ -12,7 +13,7 @@ type Game struct {
 	Clock2       int32
 	Clshnt       bool
 	Closed       bool
-	Closng       bool
+	Closing      bool
 	Lmwarn       bool
 	Novice       bool
 	Panic        bool
@@ -49,7 +50,7 @@ type Game struct {
 	}
 	Dwarves [dungeon.NDWARVES + 1]struct {
 		Seen   int32
-		Loc    int
+		Loc    int32
 		Oldloc int32
 	}
 	Objects [dungeon.NOBJECTS + 1]struct {
@@ -80,6 +81,16 @@ const (
 	SAVE_VERSION = 1
 
 	NOVICELIMIT = 1000
+
+	PANICTIME = 15
+
+	DALTLC = dungeon.LOC_NUGGET // alternate dwarf location
+
+	PIRATE = dungeon.NDWARVES
+
+	IS_FIXED      = -1
+	IS_FREE       = 0
+	PIT_KILL_PROB = 35
 )
 
 type Save struct {
@@ -100,35 +111,9 @@ type Settings struct {
 	Scripts          []string
 }
 
-func (g *Game) Drop(object, where int32) {
-
-	/*  Place an object at a given loc, prefixing it onto the game atloc
-	 * list.  Decr game.holdng if the object was being toted. No state
-	 * change on the object. */
-
-	if object > dungeon.NOBJECTS {
-		g.Objects[object-dungeon.NOBJECTS].Fixed = where
-	} else {
-		if g.Objects[object].Place == CARRIED {
-			if object != int32(dungeon.BIRD) {
-				/* The bird has to be weightless.  This ugly
-				 * hack (and the corresponding code in the carry
-				 * function) brought to you by the fact that
-				 * when the bird is caged, we need to be able to
-				 * either 'take bird' or 'take cage' and have
-				 * the right thing happen.
-				 */
-				g.Holdng--
-			}
-			g.Objects[object].Place = where
-		}
-
-		if where == int32(dungeon.LOC_NOWHERE) || where == CARRIED {
-			return
-		}
-
-		g.Link[object] = g.Locs[where].Atloc
-		g.Locs[where].Atloc = object
-
-	}
+type Travel struct {
+	DestType  string
+	DestVal   int
+	NoDwarves bool
+	Stop      bool
 }

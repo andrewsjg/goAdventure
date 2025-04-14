@@ -88,7 +88,7 @@ func NewGame(seed int, restoreFileName string, autoSaveFileName string, logFileN
 		game.Zzword[5] = '\x00'
 
 		for i := 1; i < dungeon.NDWARVES; i++ {
-			game.Dwarves[i].Loc = dungeon.DwarfLocs[i-1]
+			game.Dwarves[i].Loc = int32(dungeon.DwarfLocs[i-1])
 
 		}
 
@@ -117,8 +117,8 @@ func NewGame(seed int, restoreFileName string, autoSaveFileName string, logFileN
 			if dungeon.Objects[i].Fixd > 0 {
 
 				// TODO: Fix these int type casts.
-				game.Drop(int32(i+dungeon.NOBJECTS), int32(dungeon.Objects[i].Fixd))
-				game.Drop(int32(i), int32(dungeon.Objects[i].Plac))
+				game.drop(int32(i+dungeon.NOBJECTS), int32(dungeon.Objects[i].Fixd))
+				game.drop(int32(i), int32(dungeon.Objects[i].Plac))
 			}
 		}
 
@@ -126,7 +126,7 @@ func NewGame(seed int, restoreFileName string, autoSaveFileName string, logFileN
 			k := dungeon.NOBJECTS + 1 - i
 			game.Objects[k].Fixed = int32(dungeon.Objects[k].Fixd)
 			if dungeon.Objects[k].Plac != 0 && dungeon.Objects[k].Fixd <= 0 {
-				game.Drop(int32(k), int32(dungeon.Objects[k].Plac))
+				game.drop(int32(k), int32(dungeon.Objects[k].Plac))
 			}
 		}
 
@@ -191,11 +191,10 @@ func (g *Game) Start() string {
 	return dungeon.Arbitrary_Messages[dungeon.WELCOME_YOU]
 }
 
-func (g *Game) ProcessCommand(command string) string {
+func (g *Game) ProcessCommand(command string) error {
 
-	output := ""
-
-	output = fmt.Sprintf("CMD: %s LOC: %d", command, g.Loc)
+	var err error
+	g.Output = fmt.Sprintf("CMD: %s LOC: %d", command, g.Loc)
 
 	cmd := strings.ToUpper(command)
 
@@ -204,22 +203,690 @@ func (g *Game) ProcessCommand(command string) string {
 	// then the player has asked for instructions
 
 	if g.Settings.NewGame && strings.Contains(cmd, "Y") {
-		output = dungeon.Arbitrary_Messages[dungeon.CAVE_NEARBY]
+		g.Output = dungeon.Arbitrary_Messages[dungeon.CAVE_NEARBY]
 		g.Novice = true
 		g.Limit = NOVICELIMIT // Numner of turns allowed for a novice player
 
 		// Reset new game flag since the game has now progressed
 		g.Settings.NewGame = false
 
+	} else if g.Settings.EnableDebug && cmd == "ZZTEST" {
+		err = g.rspeak(int32(dungeon.YOU_JOKING))
+
+		if err != nil {
+			g.Output = fmt.Sprintf("Error: %s", err)
+		}
+
 	} else {
 
 		// Game in progress
 
-		// Descrobe location
+		// Do we need to move?
+		g.DoMove()
+
+		// Describe location
 
 	}
 
-	return output
+	return err
+}
+
+func (g *Game) DoMove() bool {
+
+	// Can't leave cave once it's closing (except by main office)
+	if outside(g.Newloc) && g.Newloc != 0 && g.Closing {
+		g.rspeak(int32(dungeon.EXIT_CLOSED))
+		g.Newloc = g.Loc
+
+		if !g.Panic {
+			g.Clock2 = PANICTIME
+		}
+		g.Panic = true
+	}
+
+	/*  See if a dwarf has seen the player and has come from where he
+	 *  wants to go.  If so, the dwarf's blocking the player's way.  If
+	 *  coming from place forbidden to pirate (dwarves rooted in
+	 *  place) let the player get out (and attacked). */
+
+	if g.Newloc != g.Loc && !forced(g.Loc) && !condbit(g.Loc, dungeon.COND_NOARRR) {
+
+		for i := 1; i <= dungeon.NDWARVES; i++ {
+			if (g.Dwarves[i].Oldloc == g.Newloc) && (g.Dwarves[i].Seen != 0) {
+				g.Newloc = g.Loc
+				g.rspeak(int32(dungeon.DWARF_BLOCK))
+				break
+			}
+		}
+	}
+
+	g.Loc = g.Newloc
+
+	if !g.dwarfmove() {
+		croak()
+		return false
+	}
+
+	/* The easiest way to get killed is to fall into a pit in
+	 * pitch darkness. */
+	if g.Loc == int32(dungeon.LOC_NOWHERE) {
+		croak()
+		return false
+	}
+
+	if !forced(g.Loc) && g.dark() && g.Wzdark && pct(PIT_KILL_PROB) {
+		g.rspeak(int32(dungeon.PIT_FALL))
+		g.Oldlc2 = g.Loc
+		croak()
+		return false
+	}
+
+	return true
+
+}
+
+// Miscellaneous game functions
+
+// TODO: Not sure we need this? Should be some sort of randomness here?
+func (g *Game) rspeak(vocab int32, args ...interface{}) error {
+	msg, err := g.vspeak(dungeon.Arbitrary_Messages[vocab], false, args...)
+
+	if err != nil {
+		return err
+	} else {
+
+		g.Output = msg
+		return nil
+	}
+}
+
+// TODO: This can probably be refactored to be more go like
+func (g *Game) vspeak(msg string, blank bool, args ...interface{}) (string, error) {
+
+	if msg == "" {
+		return "", nil
+	}
+
+	if blank {
+		return fmt.Sprintf("\n"), nil
+	}
+
+	pluralise := false
+
+	renderedString := msg
+
+	// If location is outside. Render the string with "ground" instead of "floor"
+	if strings.Contains("floor", renderedString) && !inside(g.Loc) {
+		renderedString = strings.Replace(renderedString, "floor", "ground", -1)
+	}
+
+	if strings.Contains("%d", renderedString) {
+		digits := findOccurrences("%d", renderedString)
+
+		// if we are rendering digits into a string then the passed args
+		// should all be digits.
+
+		if len(args) != len(digits) {
+			return "", fmt.Errorf("error: Number of digits in string does not match number of args")
+		}
+
+		// replace %d in the string with the args in the order they appear in the
+		// passed args
+		strVals := make([]string, len(args))
+		for i, arg := range args {
+
+			value, ok := arg.(int)
+			if ok {
+				stringValue := fmt.Sprintf("%d", value)
+
+				// More than one thing, so we should pularise the string
+				if value > 1 {
+					pluralise = true
+				}
+
+				strVals[i] = stringValue
+			} else {
+				return "", fmt.Errorf("error: Argument %d is not an int", i)
+			}
+
+		}
+
+		renderedString = replaceOccurrences(renderedString, "%d", strVals)
+
+	}
+
+	if strings.Contains("%s", renderedString) {
+		strings := findOccurrences("%s", renderedString)
+
+		// if we are rendering strings into a string then the passed args
+		// should all be strings.
+
+		if len(args) != len(strings) {
+			return "", fmt.Errorf("error: Number of strings in string does not match number of args")
+		}
+
+		// replace %s in the string with the args in the order they appear in the
+		// passed args
+		strVals := make([]string, len(args))
+		for i, arg := range args {
+
+			value, ok := arg.(string)
+			if ok {
+				strVals[i] = value
+			} else {
+				return "", fmt.Errorf("error: Argument %d is not a string", i)
+			}
+
+		}
+
+		renderedString = replaceOccurrences(renderedString, "%s", strVals)
+	}
+
+	if strings.Contains("%S", renderedString) {
+		if pluralise {
+			renderedString = strings.Replace(renderedString, "%S", "s", -1)
+		} else {
+			renderedString = strings.Replace(renderedString, "%S", "", -1)
+		}
+	}
+	return renderedString, nil
+}
+
+/*
+		Dwarf stuff.  See earlier comments for description of
+		variables.  Remember sixth dwarf is pirate and is thus
+		very different except for motion rules.
+
+
+		First off, don't let the dwarves follow him into a pit or a
+		wall.  Activate the whole mess the first time he gets as far
+		as the Hall of Mists (what INDEEP() tests).  If game.newloc
+		is forbidden to pirate (in particular, if it's beyond the
+		troll bridge), bypass dwarf stuff.  That way pirate can't
+		steal return toll, and dwarves can't meet the bear.  Also
+		means dwarves won't follow him into dead end in maze, but
+		c'est la vie.  They'll wait for him outside the dead end.
+
+		When the dwarves move, return true if the player survives,
+	 	false if the player dies
+*/
+
+func croak() {
+	// TODO: Implement this
+}
+
+func (g *Game) dwarfmove() bool {
+	var kk, stick, attack int
+	var tk [21]int32
+
+	if g.Loc == int32(dungeon.LOC_NOWHERE) || forced(g.Loc) || condbit(g.Loc, dungeon.COND_NOARRR) {
+		return true
+	}
+
+	/* Dwarf activity level ratchets up */
+
+	if g.Dflag == 0 {
+		if indeep(g.Loc) {
+			g.Dflag = 1
+		}
+		return true
+	}
+
+	/*  When we encounter the first dwarf, we kill 0, 1, or 2 of
+	 *  the 5 dwarves.  If any of the survivors is at game.loc,
+	 *  replace them with the alternate. */
+	if g.Dflag == 1 {
+		if !indeep(g.Loc) || pct(95) && (!condbit(g.Loc, dungeon.COND_NOBACK) || pct(85)) {
+			return true
+		}
+
+		g.Dflag = 2
+		for i := 1; i <= 2; i++ {
+			j := 1 + g.randRange(dungeon.NDWARVES-1)
+			if pct(50) {
+				g.Dwarves[j].Loc = 0
+			}
+		}
+
+		/* Alternate initial loc for dwarf, in case one of them
+		   starts out on top of the adventurer. */
+
+		for i := 1; i <= dungeon.NDWARVES; i++ {
+			if int32(g.Dwarves[i].Loc) == g.Loc {
+				g.Dwarves[i].Loc = int32(DALTLC)
+			}
+			g.Dwarves[i].Oldloc = g.Dwarves[i].Loc
+
+		}
+		g.rspeak(int32(dungeon.DWARF_RAN))
+		g.drop(int32(dungeon.AXE), g.Loc)
+		return true
+
+	}
+
+	/*  Things are in full swing.  Move each dwarf at random,
+	 *  except if he's seen us he sticks with us.  Dwarves stay
+	 *  deep inside.  If wandering at random, they don't back up
+	 *  unless there's no alternative.  If they don't have to
+	 *  move, they attack.  And, of course, dead dwarves don't do
+	 *  much of anything. */
+
+	g.Dtotal = 0
+	attack = 0
+	stick = 0
+
+	for i := 1; i <= dungeon.NDWARVES; i++ {
+		if g.Dwarves[i].Loc == 0 {
+			continue
+		}
+
+		j := 1
+
+		/*  Fill tk array with all the places this dwarf might go. */
+		kk = int(dungeon.TKey[g.Dwarves[i].Loc])
+		if kk == 0 {
+			for {
+				destType := dungeon.Travel[kk].DestType
+				g.Newloc = int32(dungeon.Travel[kk].DestVal)
+
+				if destType != dungeon.DestGoto {
+					continue
+				} else if !indeep(g.Newloc) {
+					continue
+				} else if g.Newloc == g.Dwarves[i].Oldloc {
+					continue
+				} else if j > 1 && g.Newloc == tk[j-1] {
+					continue
+				} else if j >= len(tk)-1 {
+					// apparently this can't happen
+					continue
+				} else if forced(g.Newloc) {
+					continue
+				} else if i == PIRATE && condbit(g.Newloc, dungeon.COND_NOARRR) {
+					continue
+				} else if dungeon.Travel[kk].NoDwarves {
+					continue
+				}
+				j++
+				tk[j] = g.Newloc
+
+				if dungeon.Travel[kk].Stop {
+					break
+				}
+			}
+		}
+		tk[j] = g.Dwarves[i].Oldloc
+
+		if j >= 2 {
+			j--
+		}
+
+		j = 1 + int(g.randRange(int32(j)))
+		g.Dwarves[i].Oldloc = g.Dwarves[i].Loc
+		g.Dwarves[i].Loc = int32(tk[j])
+
+		id := 1
+		if !indeep(g.Loc) {
+			id = 0
+		}
+		g.Dwarves[i].Seen = 0
+
+		if (g.Dwarves[i].Seen != 0 && id != 0) || g.Dwarves[i].Loc == g.Loc || g.Dwarves[i].Oldloc == g.Loc {
+			g.Dwarves[i].Seen = 1
+		}
+
+		if g.Dwarves[i].Seen == 0 {
+			continue
+		}
+
+		g.Dwarves[i].Loc = g.Loc
+
+		if g.spottedByPirate(i) {
+			continue
+		}
+
+		g.Dtotal++
+
+		if g.Dwarves[i].Oldloc == g.Dwarves[i].Loc {
+			attack++
+			if g.Knfloc >= int32(dungeon.LOC_NOWHERE) {
+				g.Knfloc = g.Loc
+			}
+
+			if g.randRange(1000) < 95*(g.Dflag-2) {
+				stick++
+			}
+		}
+	}
+
+	/*  Now we know what's happening.  Let's tell the poor sucker about it.
+	 */
+
+	if g.Dtotal == 0 {
+		return true
+	}
+
+	if g.Dtotal == 1 {
+		g.rspeak(int32(dungeon.DWARF_SINGLE), g.Dtotal)
+	} else {
+		g.rspeak(int32(dungeon.DWARF_PACK), g.Dtotal)
+	}
+
+	if attack == 0 {
+		return true
+	}
+
+	if g.Dflag == 2 {
+		g.Dflag = 3
+	}
+
+	if attack > 1 {
+		g.rspeak(int32(dungeon.THROWN_KNIVES), attack)
+
+		if stick > 1 {
+			g.rspeak(int32(dungeon.MULTIPLE_HITS), stick)
+		} else if stick == 1 {
+			g.rspeak(int32(dungeon.ONE_HIT), stick)
+		} else {
+			g.rspeak(int32(dungeon.NONE_HIT), stick)
+		}
+	} else {
+		g.rspeak(int32(dungeon.KNIFE_THROWN))
+
+		if stick != 0 {
+			g.rspeak(int32(dungeon.GETS_YOU))
+		} else {
+			g.rspeak(int32(dungeon.MISSES_YOU))
+		}
+	}
+
+	if stick == 0 {
+		return true
+	}
+
+	g.Oldlc2 = g.Loc
+
+	return false
+}
+
+func (g *Game) getNextLCGValue() int32 {
+	oldx := g.LcgX
+	g.LcgX = (LCG_A*g.LcgX + LCG_C) % LCG_M
+	if g.Settings.EnableDebug {
+		fmt.Printf("random %d\n", oldx)
+	}
+
+	return oldx
+}
+
+func (g *Game) randRange(rndRange int32) int32 {
+	// Generate a random number between 0 and range
+	return rndRange * g.getNextLCGValue() % LCG_M
+}
+
+func (g *Game) spottedByPirate(dwarfNum int) bool {
+	if dwarfNum != PIRATE {
+		return false
+	}
+
+	/*  The pirate's spotted the player.  Pirate leaves the player
+	    alone once we've found chest.  K counts if a treasure is here.
+		If not, and tally=1 for an unseen chest, let the pirate be spotted.
+		Note that game.objexts,place[CHEST] = LOC_NOWHERE might mean that he's
+	    thrown it to the troll, but in that case he's seen the chest
+	    OBJECT_IS_FOUND(CHEST) == true. */
+
+	if g.Loc == g.Chloc || !g.objectIsNotFound(dungeon.CHEST) {
+		return true
+	}
+
+	snarfed := 0
+	movechest := false
+	robplayer := false
+
+	for treasure := 1; treasure <= dungeon.NOBJECTS; treasure++ {
+		if !dungeon.Objects[treasure].Is_Treasure {
+			continue
+		}
+
+		/*  Pirate won't take pyramid from plover room or dark
+		 *  room (too easy!). */
+
+		if treasure == dungeon.PYRAMID && g.Loc == int32(dungeon.Objects[dungeon.PYRAMID].Plac) ||
+			g.Loc == int32(dungeon.Objects[dungeon.EMERALD].Plac) {
+			continue
+		}
+
+		if g.toting(treasure) || g.here(treasure) {
+			snarfed++
+		}
+
+		if g.toting(treasure) {
+			movechest = true
+			robplayer = true
+		}
+
+		/* Force chest placement before player finds last treasure */
+		if g.Tally == 1 && snarfed == 0 &&
+			g.Objects[dungeon.CHEST].Place == int32(dungeon.LOC_NOWHERE) &&
+			g.here(int(dungeon.LAMP)) &&
+			g.Objects[dungeon.LAMP].Prop == dungeon.LAMP_BRIGHT {
+
+			g.rspeak(int32(dungeon.PIRATE_SPOTTED))
+			movechest = true
+		}
+
+		/* Do things in this order (chest move before robbery) so chest is
+		* listed last at the maze location. */
+
+		if movechest {
+			g.move(int32(dungeon.CHEST), g.Chloc)
+			g.move(int32(dungeon.MESSAG), g.Chloc2)
+
+			g.Dwarves[PIRATE].Loc = g.Chloc
+			g.Dwarves[PIRATE].Oldloc = g.Chloc
+			g.Dwarves[PIRATE].Seen = 0
+		} else {
+			if g.Dwarves[PIRATE].Oldloc != g.Dwarves[PIRATE].Loc && pct(20) {
+				g.rspeak(int32(dungeon.PIRATE_RUSTLES))
+			}
+		}
+
+		if robplayer {
+			g.rspeak(int32(dungeon.PIRATE_POUNCES))
+
+			for treasure := 1; treasure <= dungeon.NOBJECTS; treasure++ {
+
+				if !dungeon.Objects[treasure].Is_Treasure {
+					continue
+				}
+
+				if !(treasure == dungeon.PYRAMID &&
+					(g.Loc == g.Objects[dungeon.PYRAMID].Place ||
+						g.Loc == g.Objects[dungeon.EMERALD].Place)) {
+
+					if g.at(int32(treasure)) && g.Objects[treasure].Fixed == IS_FREE {
+						g.carry(int32(treasure), g.Loc)
+					}
+
+					if g.toting(treasure) {
+						g.drop(int32(treasure), g.Chloc)
+					}
+				}
+			}
+		}
+
+	}
+
+	return true
+}
+
+func (g *Game) carry(object, where int32) {
+	/*  Start toting an object, removing it from the list of things at its
+	 * former location.  Incr holdng unless it was already being toted.  If
+	 * object>NOBJECTS (moving "fixed" second loc), don't change game.place
+	 * or game.holdng. */
+
+	if object > dungeon.NOBJECTS {
+		if g.Objects[object].Place == CARRIED {
+			return
+		}
+
+		g.Objects[object].Place = CARRIED
+
+		/*
+		 * Without this conditional your inventory is overcounted
+		 * when you pick up the bird while it's caged. This fixes
+		 * a cosmetic bug in the original.
+		 *
+		 * Possibly this check should be skipped whwn oldstyle is on.
+		 */
+		if object != int32(dungeon.BIRD) {
+			g.Holdng++
+		}
+	}
+
+	if g.Locs[where].Atloc == object {
+		g.Locs[where].Atloc = g.Link[object]
+		return
+	}
+	temp := g.Locs[where].Atloc
+	for temp != object {
+		temp = g.Link[temp]
+	}
+
+	g.Link[temp] = g.Link[object]
+
+}
+
+func (g *Game) drop(object, where int32) {
+
+	/*  Place an object at a given loc, prefixing it onto the game atloc
+	 * list.  Decr game.holdng if the object was being toted. No state
+	 * change on the object. */
+
+	if object > dungeon.NOBJECTS {
+		g.Objects[object-dungeon.NOBJECTS].Fixed = where
+	} else {
+		if g.Objects[object].Place == CARRIED {
+			if object != int32(dungeon.BIRD) {
+				/* The bird has to be weightless.  This ugly
+				 * hack (and the corresponding code in the carry
+				 * function) brought to you by the fact that
+				 * when the bird is caged, we need to be able to
+				 * either 'take bird' or 'take cage' and have
+				 * the right thing happen.
+				 */
+				g.Holdng--
+			}
+			g.Objects[object].Place = where
+		}
+
+		if where == int32(dungeon.LOC_NOWHERE) || where == CARRIED {
+			return
+		}
+
+		g.Link[object] = g.Locs[where].Atloc
+		g.Locs[where].Atloc = object
+
+	}
+}
+
+func (g *Game) move(object int32, where int32) {
+	/*  Place any object anywhere by picking it up and dropping it.  May
+	 *  already be toting, in which case the carry is a no-op.  Mustn't
+	 *  pick up objects which are not at any loc, since carry wants to
+	 *  remove objects from game atloc chains. */
+
+	var from int32
+
+	if object > dungeon.NOBJECTS {
+		from = g.Objects[object-dungeon.NOBJECTS].Fixed
+	} else {
+		from = g.Objects[object].Place
+	}
+
+	if from != int32(dungeon.LOC_NOWHERE) && from != CARRIED {
+		g.carry(object, from)
+	}
+	g.drop(object, where)
+}
+
+// TODO: refactor these perhaps
+func (g *Game) at(object int32) bool {
+	return g.Objects[object].Place == g.Loc ||
+		g.Objects[object].Fixed == g.Loc
+}
+
+func (g *Game) here(object int) bool {
+	return g.at(int32(object)) || g.toting(object)
+}
+
+func (g *Game) toting(object int) bool {
+	return g.Objects[object].Place == CARRIED
+}
+
+func (g *Game) objectIsNotFound(object int) bool {
+	return g.Objects[object].Prop == STATE_NOTFOUND
+}
+
+func (g *Game) dark() bool {
+	return !condbit(g.Loc, dungeon.COND_LIT) &&
+		g.Objects[dungeon.LAMP].Prop == dungeon.LAMP_DARK ||
+		!g.here(int(dungeon.LAMP))
+}
+
+/*
+ *  DESTROY(N)  = Get rid of an item by putting it in LOC_NOWHERE
+ *  MOD(N,M)    = Arithmetic modulus
+ *  TOTING(OBJ) = true if the OBJ is being carried
+ *  AT(OBJ)     = true if on either side of two-placed object
+ *  HERE(OBJ)   = true if the OBJ is at "LOC" (or is being carried)
+ *  CNDBIT(L,N) = true if COND(L) has bit n set (bit 0 is units bit)
+ *  LIQUID()    = object number of liquid in bottle
+ *  LIQLOC(LOC) = object number of liquid (if any) at LOC
+ *  FORCED(LOC) = true if LOC moves without asking for input (COND=2)
+ *  DARK(LOC)   = true if location "LOC" is dark
+ *  PCT(N)      = true N% of the time (N integer from 0 to 100)
+ *  GSTONE(OBJ) = true if OBJ is a gemstone
+ *  FOREST(LOC) = true if LOC is part of the forest
+ *  OUTSID(LOC) = true if location not in the cave
+ *  INSIDE(LOC) = true if location is in the cave or the building at the
+ * beginning of the game INDEEP(LOC) = true if location is in the Hall of Mists
+ * or deeper BUG(X)      = report bug and exit
+ */
+
+func forest(location int32) bool {
+	return condbit(location, dungeon.COND_FOREST)
+}
+
+func outside(loction int32) bool {
+	return condbit(loction, dungeon.COND_ABOVE) || forest(loction)
+}
+
+func inside(location int32) bool {
+	return !outside(location) || location == int32(dungeon.LOC_BUILDING)
+}
+
+func tstbit(mask int32, bit int32) bool {
+	return (mask & setBit(bit)) != 0
+}
+
+func condbit(L int32, N int32) bool {
+	return tstbit(int32(dungeon.Conditions[L]), N)
+}
+
+func forced(location int32) bool {
+	return condbit(location, dungeon.COND_FORCED)
+}
+
+func indeep(location int32) bool {
+	return condbit(location, dungeon.COND_DEEP)
+}
+
+// Checks if a randomly generated number between 0 and 99 is less than N
+func pct(n int32) bool {
+	return (rand.Int31n(100) < n)
 }
 
 // Utility Functions
@@ -286,4 +953,73 @@ func setBit(bit int32) int32 {
 
 func getNextLCGValue(lcgX int32) int32 {
 	return (LCG_A*lcgX + LCG_C) % LCG_M
+}
+
+func findOccurrences(haystack, needle string) []int {
+	var indices []int
+	offset := 0
+
+	for {
+		// Find the index of the substring starting from the current offset
+		index := strings.Index(haystack[offset:], needle)
+		if index == -1 {
+			break // No more occurrences
+		}
+
+		// Add the absolute index to the result
+		absoluteIndex := offset + index
+		indices = append(indices, absoluteIndex)
+
+		// Move the offset forward to continue searching
+		offset = absoluteIndex + len(needle)
+	}
+
+	return indices
+}
+
+func replaceOccurrences(haystack, needle string, replacements []string) string {
+	var result strings.Builder
+	offset := 0
+	replacementIndex := 0
+
+	for {
+		// Find the next occurrence of the substring
+		index := strings.Index(haystack[offset:], needle)
+		if index == -1 {
+			// No more occurrences, append the rest of the string
+			result.WriteString(haystack[offset:])
+			break
+		}
+
+		// Append the part of the string before the match
+		result.WriteString(haystack[offset : offset+index])
+
+		// Append the replacement string
+		if replacementIndex < len(replacements) {
+			result.WriteString(replacements[replacementIndex])
+			replacementIndex++
+		} else {
+			// If no more replacements are available, append the original substring
+			result.WriteString(needle)
+		}
+
+		// Move the offset past the current match
+		offset += index + len(needle)
+	}
+
+	return result.String()
+}
+
+func replaceAtIndex(haystack string, index int, length int, replacement string) (string, error) {
+	// Ensure the index and length are within bounds
+	if index < 0 || index+length > len(haystack) {
+		return "", fmt.Errorf("index or length out of bounds")
+	}
+
+	// Split the string into three parts
+	before := haystack[:index]             // Part before the substring
+	after := haystack[index+length:]       // Part after the substring
+	result := before + replacement + after // Concatenate with replacement
+
+	return result, nil
 }

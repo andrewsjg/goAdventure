@@ -114,7 +114,7 @@ type Travelop_t struct {{
   CondArg1 int
   CondArg2 int64
   DestType DestType
-  DestVal  interface{{}} //Location_Refs
+  DestVal  int //Location_Refs
   NoDwarves bool
   Stop bool
 }}

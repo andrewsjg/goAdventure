@@ -13,18 +13,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg: // Handle keyboard input
 		switch msg.String() {
 		case "enter": // When the user presses Enter
+
+			// TODO: Maybe the game should handle the exit
+			// condition in the processcommand function?
 			if m.input.Value() == "exit" {
 
 				// TODO: Add prompt to save
 				return m, tea.Quit // Exit the program
 			}
 
-			// TODO: Send this to the game
-			gameOutput := m.game.ProcessCommand(m.input.Value())
-			m.output = gameOutput
+			err := m.game.ProcessCommand(m.input.Value())
 
-			m.debug = fmt.Sprintf("CMD: %s\n", m.input.Value())
-			m.input.SetValue("") // Clear the input field
+			if err != nil {
+				m.output = fmt.Sprintf("Error: %s", err.Error())
+			} else {
+				m.output = m.game.Output
+
+				m.debug = fmt.Sprintf("CMD: %s\n", m.input.Value())
+				m.input.SetValue("") // Clear the input field
+			}
 
 		case "ctrl+c": // Handle Ctrl+C to quit
 			return m, tea.Quit
