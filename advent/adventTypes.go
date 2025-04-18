@@ -3,48 +3,51 @@ package advent
 import "github.com/andrewsjg/goAdventure/dungeon"
 
 type Game struct {
-	Output       string
-	LcgX         int32
-	Abbnum       int32
-	Bonus        int32
-	Chloc        int32
-	Chloc2       int32
-	Clock1       int32
-	Clock2       int32
-	Clshnt       bool
-	Closed       bool
-	Closing      bool
-	Lmwarn       bool
-	Novice       bool
-	Panic        bool
-	Wzdark       bool
-	Blooded      bool
-	Conds        int32
-	Detail       int32
-	Dflag        int32
-	Dkill        int32
-	Dtotal       int32
-	Foobar       int32
-	Holdng       int32
-	Igo          int32
-	Iwest        int32
-	Knfloc       int32
-	Limit        int32
-	Loc          int32
-	Newloc       int32
-	Numdie       int32
-	Oldloc       int32
-	Oldlc2       int32
-	Oldobj       int32
-	Saved        int32
-	Tally        int32
-	Thresh       int32
-	Seenbigwords bool
-	Trnluz       int32
-	Turns        int32
-	Seedval      int
-	Zzword       [5 + 1]byte
-	Locs         [dungeon.NLOCATIONS + 1]struct {
+	QueryFlag       bool
+	QueryResponse   string
+	OnQueryResponse func(response string) string `json:"-"`
+	Output          string
+	LcgX            int32
+	Abbnum          int32
+	Bonus           ScoreBonus
+	Chloc           int32
+	Chloc2          int32
+	Clock1          int32
+	Clock2          int32
+	Clshnt          bool
+	Closed          bool
+	Closing         bool
+	Lmwarn          bool
+	Novice          bool
+	Panic           bool
+	Wzdark          bool
+	Blooded         bool
+	Conds           int32
+	Detail          int32
+	Dflag           int32
+	Dkill           int32
+	Dtotal          int32
+	Foobar          int32
+	Holdng          int32
+	Igo             int32
+	Iwest           int32
+	Knfloc          int32
+	Limit           int32
+	Loc             int32
+	Newloc          int32
+	Numdie          int32
+	Oldloc          int32
+	Oldlc2          int32
+	Oldobj          int32
+	Saved           int32
+	Tally           int32
+	Thresh          int32
+	Seenbigwords    bool
+	Trnluz          int32
+	Turns           int32
+	Seedval         int
+	Zzword          [5 + 1]byte
+	Locs            [dungeon.NLOCATIONS + 1]struct {
 		Abbrev int32
 		Atloc  int32
 	}
@@ -117,3 +120,20 @@ type Travel struct {
 	NoDwarves bool
 	Stop      bool
 }
+
+type Termination int
+
+const (
+	EndGame Termination = iota
+	QuitGame
+	ScoreGame
+)
+
+type ScoreBonus int
+
+const (
+	None ScoreBonus = iota
+	Splatter
+	Defeat
+	Victory
+)

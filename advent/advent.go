@@ -194,7 +194,7 @@ func (g *Game) Start() string {
 func (g *Game) ProcessCommand(command string) error {
 
 	var err error
-	g.Output = fmt.Sprintf("CMD: %s LOC: %d", command, g.Loc)
+	//g.Output = fmt.Sprintf("CMD: %s LOC: %d", command, g.Loc)
 
 	cmd := strings.ToUpper(command)
 
@@ -210,12 +210,17 @@ func (g *Game) ProcessCommand(command string) error {
 		// Reset new game flag since the game has now progressed
 		g.Settings.NewGame = false
 
-	} else if g.Settings.EnableDebug && cmd == "ZZTEST" {
-		err = g.rspeak(int32(dungeon.YOU_JOKING))
+	} else if g.Settings.EnableDebug && cmd == "ZZTEST1" {
+		g.croak()
 
-		if err != nil {
-			g.Output = fmt.Sprintf("Error: %s", err)
-		}
+	} else if g.Settings.EnableDebug && cmd == "ZZTEST2" {
+
+		g.Output = "ZZTEST2. Old Output: " + g.Output
+
+	} else if g.QueryFlag {
+		// Game has asked a question. The command will be the response
+		g.QueryResponse = cmd
+		g.QueryFlag = false
 
 	} else {
 
@@ -263,21 +268,21 @@ func (g *Game) DoMove() bool {
 	g.Loc = g.Newloc
 
 	if !g.dwarfmove() {
-		croak()
+		g.croak()
 		return false
 	}
 
 	/* The easiest way to get killed is to fall into a pit in
 	 * pitch darkness. */
 	if g.Loc == int32(dungeon.LOC_NOWHERE) {
-		croak()
+		g.croak()
 		return false
 	}
 
 	if !forced(g.Loc) && g.dark() && g.Wzdark && pct(PIT_KILL_PROB) {
 		g.rspeak(int32(dungeon.PIT_FALL))
 		g.Oldlc2 = g.Loc
-		croak()
+		g.croak()
 		return false
 	}
 
@@ -287,8 +292,7 @@ func (g *Game) DoMove() bool {
 
 // Miscellaneous game functions
 
-// TODO: Not sure we need this? Should be some sort of randomness here?
-func (g *Game) rspeak(vocab int32, args ...interface{}) error {
+func (g *Game) rspeak(vocab int32, args ...any) error {
 	msg, err := g.vspeak(dungeon.Arbitrary_Messages[vocab], false, args...)
 
 	if err != nil {
@@ -300,8 +304,21 @@ func (g *Game) rspeak(vocab int32, args ...interface{}) error {
 	}
 }
 
+// Speak a specified string
+func (g *Game) speak(msg string, args ...any) error {
+	msg, err := g.vspeak(msg, true, args...)
+
+	if err != nil {
+		return err
+	} else {
+
+		g.Output = msg
+		return nil
+	}
+}
+
 // TODO: This can probably be refactored to be more go like
-func (g *Game) vspeak(msg string, blank bool, args ...interface{}) (string, error) {
+func (g *Game) vspeak(msg string, blank bool, args ...any) (string, error) {
 
 	if msg == "" {
 		return "", nil
@@ -411,8 +428,96 @@ func (g *Game) vspeak(msg string, blank bool, args ...interface{}) (string, erro
 	 	false if the player dies
 */
 
-func croak() {
-	// TODO: Implement this
+/*  "You're dead, Jim."
+ *
+ *  If the current loc is zero, it means the clown got himself killed.
+ *  We'll allow this maxdie times.  NDEATHS is automatically set based
+ *  on the number of snide messages available.  Each death results in
+ *  a message (obituaries[n]) which offers reincarnation; if accepted,
+ *  this results in message obituaries[0], obituaries[2], etc.  The
+ *  last time, if the player wants another chance, they gets a snide
+ *  remark as we exit.
+ *  When reincarnated, all objects being carried get dropped
+ *  at game.oldlc2 (presumably the last place prior to being killed)
+ *  without change of props.  The loop runs backwards to assure that
+ *  the bird is dropped before the cage.  (This kluge could be changed
+ *  once we're sure all references to bird and cage are done by
+ *  keywords.)  The lamp is a special case (it wouldn't do to leave it
+ *  in the cave). It is turned off and left outside the building (only
+ *  if he was carrying it, of course).  He himself is left inside the
+ *  building (and heaven help him if he tries to xyzzy back into the
+ *  cave without the lamp!).  game.oldloc is zapped so he can't just
+ *  "retreat". */
+
+func (g *Game) croak() {
+	/*  Okay, player's dead.  Let's get on with it. */
+
+	query := dungeon.Obituaries[g.Numdie].Query
+	// Yes_Response := dungeon.Obituaries[g.Numdie].Yes_Response
+	croakOutput := ""
+
+	g.Numdie++
+
+	if g.Closing {
+
+		g.rspeak(int32(dungeon.DEATH_CLOSING))
+		g.terminate(EndGame) // end game
+	}
+
+	// Player has Used up all their lives
+	if g.Numdie == dungeon.NDEATHS {
+		g.speak(dungeon.Arbitrary_Messages[dungeon.OK_MAN])
+		g.terminate(EndGame)
+	}
+
+	// Ask if they want to try again
+	g.AskQuestion(query, func(response string) string {
+		if strings.Contains(strings.ToUpper(response), "Y") {
+
+			/* If the player wishes to continue, we empty the liquids in the
+			* user's inventory, turn off the lamp, and drop all items
+			* where they died. */
+
+			g.Objects[dungeon.WATER].Place = int32(dungeon.LOC_NOWHERE)
+			g.Objects[dungeon.OIL].Place = int32(dungeon.LOC_NOWHERE)
+
+			if g.toting(dungeon.LAMP) {
+				g.Objects[dungeon.LAMP].Prop = dungeon.LAMP_DARK
+			}
+
+			for j := 1; j <= dungeon.NOBJECTS; j++ {
+				i := dungeon.NOBJECTS + 1 - j
+				if g.toting(i) {
+					/* Always leave lamp where it's accessible
+					 * aboveground */
+					if i == dungeon.LAMP {
+						g.drop(int32(i), int32(dungeon.LOC_START))
+					} else {
+						g.drop(int32(i), g.Oldlc2)
+					}
+				}
+			}
+
+			g.Oldloc = int32(dungeon.LOC_BUILDING)
+			g.Newloc = int32(dungeon.LOC_BUILDING)
+			g.Loc = int32(dungeon.LOC_BUILDING)
+
+		} else {
+			g.speak(dungeon.Arbitrary_Messages[dungeon.OK_MAN])
+			g.terminate(EndGame)
+		}
+
+		return croakOutput
+	})
+
+}
+
+func (g *Game) AskQuestion(query string, callback func(response string) string) {
+	g.QueryFlag = true
+	g.QueryResponse = ""
+
+	g.Output = query
+	g.OnQueryResponse = callback
 }
 
 func (g *Game) dwarfmove() bool {
@@ -836,6 +941,14 @@ func (g *Game) dark() bool {
 		!g.here(int(dungeon.LAMP))
 }
 
+func (g *Game) objectIsStashed(object int) bool {
+	return g.Objects[object].Prop < STATE_NOTFOUND
+}
+
+func (g *Game) objectIsFound(object int) bool {
+	return g.Objects[object].Prop == STATE_FOUND
+}
+
 /*
  *  DESTROY(N)  = Get rid of an item by putting it in LOC_NOWHERE
  *  MOD(N,M)    = Arithmetic modulus
@@ -884,12 +997,23 @@ func indeep(location int32) bool {
 	return condbit(location, dungeon.COND_DEEP)
 }
 
+/*  Print message X, wait for yes/no answer.  If yes, print Y and return
+ * true; if no, print Z and return false. */
+
+func YesOrNo(query, yesResponse, noResponse string) bool {
+
+	outcome := false
+
+	return outcome
+
+}
+
+// Utility Functions
+
 // Checks if a randomly generated number between 0 and 99 is less than N
 func pct(n int32) bool {
 	return (rand.Int31n(100) < n)
 }
-
-// Utility Functions
 
 // SaveStructToFile saves the struct to a file in JSON format.
 func saveStructToFile(filename string, data interface{}) error {
