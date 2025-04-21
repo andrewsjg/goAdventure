@@ -12,7 +12,9 @@ Based off Eric S. Raymond's C Port: https://gitlab.com/esr/open-adventure
 - [x] Basic Command line handling
 - [x] TUI - Prototype
 - [ ] TUI - Inventory
-- [ ] Command Parser
-- [x] Game Init
-- [x] Go Dungeon Templates
+- [ ] Game - Command parser
+- [x] Game - init
+- [x] Game - game loop
+- [x] Game - DoMove
+- [x] Go dungeon templates
 - [x] Adapt make_python.py
