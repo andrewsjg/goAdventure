@@ -3,6 +3,7 @@ package advent
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"strings"
@@ -23,6 +24,16 @@ func NewGame(seed int, restoreFileName string, autoSaveFileName string, logFileN
 	game.Settings.OldStyle = oldStyle
 	game.Settings.Autosave = autoSave
 	game.Settings.Scripts = scripts
+
+	game.Loc = int32(dungeon.LOC_START)
+	game.Newloc = int32(dungeon.LOC_START)
+	game.Chloc = int32(dungeon.LOC_MAZEEND12)
+	game.Oldlc2 = int32(dungeon.LOC_DEADEND13)
+	game.Clock1 = WARNTIME
+	game.Clock2 = FLASHTIME
+	game.Limit = GAMELIMIT
+	game.Abbnum = 5
+	game.Foobar = WORD_EMPTY
 
 	if debug {
 		fmt.Println("Debug mode enabled")
@@ -200,7 +211,8 @@ func (g *Game) ProcessCommand(command string) error {
 
 	// Game start condition
 	// If this is the start of a new game and the command is yes
-	// then the player has asked for instructions
+	// then the player has asked for instructions. This is kind of a kludge.
+	// Can probably improve by using AskQuestion.
 
 	if g.Settings.NewGame && strings.Contains(cmd, "Y") {
 		g.Output = dungeon.Arbitrary_Messages[dungeon.CAVE_NEARBY]
@@ -209,6 +221,12 @@ func (g *Game) ProcessCommand(command string) error {
 
 		// Reset new game flag since the game has now progressed
 		g.Settings.NewGame = false
+
+	} else if g.Settings.NewGame && strings.Contains(cmd, "N") {
+		g.Output = dungeon.Arbitrary_Messages[dungeon.NO_MESSAGE]
+		// Reset new game flag since the game has now progressed
+		g.Settings.NewGame = false
+		g.DescribeLocation()
 
 	} else if g.Settings.EnableDebug && cmd == "ZZTEST1" {
 		g.croak()
@@ -224,16 +242,40 @@ func (g *Game) ProcessCommand(command string) error {
 
 	} else {
 
+		g.DescribeLocation()
 		// Game in progress
 
 		// Do we need to move?
-		g.DoMove()
 
 		// Describe location
 
 	}
 
 	return err
+}
+
+func (g *Game) DescribeLocation() {
+	msg := dungeon.Locations[g.Loc].Description.Small
+
+	if (math.Mod(float64(g.Locs[g.Loc].Abbrev), float64(g.Abbnum)) == 0) || msg == "" {
+		msg = dungeon.Locations[g.Loc].Description.Big
+	}
+
+	if !forced(g.Loc) && g.dark() {
+		msg = dungeon.Arbitrary_Messages[dungeon.PITCH_DARK]
+	}
+
+	if g.toting(dungeon.BEAR) {
+		g.rspeak(int32(dungeon.TAME_BEAR))
+	}
+
+	g.speak(msg)
+
+	if g.Loc == int32(dungeon.LOC_Y2) && !g.Closing {
+		g.rspeak(int32(dungeon.SAYS_PLUGH))
+	}
+
+	g.Output = msg
 }
 
 func (g *Game) DoMove() bool {
@@ -249,8 +291,8 @@ func (g *Game) DoMove() bool {
 		g.Panic = true
 	}
 
-	/*  See if a dwarf has seen the player and has come from where he
-	 *  wants to go.  If so, the dwarf's blocking the player's way.  If
+	/*  See if a dwarf has seen the player and has come from where they
+	 *  want to go.  If so, the dwarf's blocking the player's way.  If
 	 *  coming from place forbidden to pirate (dwarves rooted in
 	 *  place) let the player get out (and attacked). */
 
@@ -406,6 +448,8 @@ func (g *Game) vspeak(msg string, blank bool, args ...any) (string, error) {
 			renderedString = strings.Replace(renderedString, "%S", "", -1)
 		}
 	}
+
+	g.Output = renderedString
 	return renderedString, nil
 }
 
@@ -936,9 +980,10 @@ func (g *Game) objectIsNotFound(object int) bool {
 }
 
 func (g *Game) dark() bool {
+
 	return !condbit(g.Loc, dungeon.COND_LIT) &&
-		g.Objects[dungeon.LAMP].Prop == dungeon.LAMP_DARK ||
-		!g.here(int(dungeon.LAMP))
+		(g.Objects[dungeon.LAMP].Prop == dungeon.LAMP_DARK ||
+			!g.here(int(dungeon.LAMP)))
 }
 
 func (g *Game) objectIsStashed(object int) bool {
@@ -982,11 +1027,12 @@ func inside(location int32) bool {
 }
 
 func tstbit(mask int32, bit int32) bool {
-	return (mask & setBit(bit)) != 0
+
+	return (mask & (1 << bit)) != 0
 }
 
 func condbit(L int32, N int32) bool {
-	return tstbit(int32(dungeon.Conditions[L]), N)
+	return tstbit(dungeon.Conditions[L], N)
 }
 
 func forced(location int32) bool {
@@ -999,14 +1045,6 @@ func indeep(location int32) bool {
 
 /*  Print message X, wait for yes/no answer.  If yes, print Y and return
  * true; if no, print Z and return false. */
-
-func YesOrNo(query, yesResponse, noResponse string) bool {
-
-	outcome := false
-
-	return outcome
-
-}
 
 // Utility Functions
 

@@ -30,7 +30,7 @@ var Hints  = []Hint_t {{
     {hints}
 }}
 
-var Conditions  = []int64{{
+var Conditions  = []int32{{
     {conditions}
 }}
 

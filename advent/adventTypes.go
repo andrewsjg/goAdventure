@@ -94,6 +94,12 @@ const (
 	IS_FIXED      = -1
 	IS_FREE       = 0
 	PIT_KILL_PROB = 35
+	WARNTIME      = 30
+	FLASHTIME     = 50
+	BATTERYLIFE   = 2500
+	GAMELIMIT     = 330
+
+	WORD_EMPTY = 0
 )
 
 type Save struct {

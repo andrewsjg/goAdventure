@@ -8,6 +8,10 @@ import (
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
+	// Move all the game objects.
+	// TODO: Check if this is a good place for this.
+	m.game.DoMove()
+
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 
@@ -33,11 +37,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				if m.game.OnQueryResponse != nil {
 					m.debug = fmt.Sprintf("Query Response: %s Calling OnQueryResponse \n", m.game.QueryResponse)
+					m.game.OnQueryResponse(m.game.QueryResponse)
 
-					m.output = m.game.OnQueryResponse(m.game.QueryResponse)
+					m.output = m.game.Output
 
 				} else {
-					m.debug = fmt.Sprintln("No OnQueryResponse function set")
+					m.debug = fmt.Sprintf("No OnQueryResponse function set\n")
 				}
 
 			} else {
@@ -48,7 +53,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.output = m.game.Output
 
-					m.debug = fmt.Sprintf("CMD: %s\n", m.input.Value())
+					m.debug = fmt.Sprintf("CMD: %s LOC: %d\n", m.input.Value(), m.game.Loc)
 					m.input.SetValue("") // Clear the input field
 				}
 			}
@@ -57,6 +62,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		}
+	default:
+		m.game.DescribeLocation()
 
 	case tea.WindowSizeMsg: // Handle window resize
 		m.input.Width = msg.Width // Adjust input width
