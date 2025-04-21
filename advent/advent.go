@@ -11,7 +11,8 @@ import (
 	"github.com/andrewsjg/goAdventure/dungeon"
 )
 
-//TODO: Implement settings
+// TODO: Implement settings
+// TODO: Split this up?
 
 func NewGame(seed int, restoreFileName string, autoSaveFileName string, logFileName string, debug bool, oldStyle bool, autoSave bool, scripts []string) Game {
 
