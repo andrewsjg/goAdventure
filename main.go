@@ -38,15 +38,16 @@ func main() {
 
 	game := advent.NewGame(0, restoreFileName, autoSaveFileName, logFileName, debug, oldStyle, autoSave, scripts)
 
-	// Main game loop
 	if game.Settings.EnableDebug {
 		fmt.Println("Starting game...")
 		fmt.Printf("ZZWORD: %s\n", string(game.Zzword[:]))
 		fmt.Printf("Seedval: %d\n", game.Seedval)
 	}
 
+	// Create a new game
 	adventure := tui.NewAdventure(game)
 
+	// Start the game
 	if _, err := adventure.Run(); err != nil {
 		fmt.Println("Error running the adventure:", err)
 		return
