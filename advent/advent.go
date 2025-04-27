@@ -243,7 +243,10 @@ func (g *Game) ProcessCommand(command string) error {
 
 	} else {
 
-		g.DescribeLocation()
+		//g.DescribeLocation()
+
+		// We just got some input from the user
+
 		// Game in progress
 
 		// Do we need to move?
