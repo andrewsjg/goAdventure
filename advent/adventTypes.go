@@ -56,12 +56,16 @@ type Game struct {
 		Loc    int32
 		Oldloc int32
 	}
+
+	//Objects []dungeon.Object_t
+
 	Objects [dungeon.NOBJECTS + 1]struct {
 		Found bool
 		Fixed int32
 		Prop  int32
 		Place int32
 	}
+
 	Hints [dungeon.NHINTS]struct {
 		Used bool
 		Lc   int32
@@ -142,4 +146,14 @@ const (
 	Splatter
 	Defeat
 	Victory
+)
+
+type SpeakType int
+
+const (
+	Touch SpeakType = iota
+	Look
+	Hear
+	Study
+	Change
 )

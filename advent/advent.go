@@ -360,6 +360,38 @@ func (g *Game) speak(msg string, args ...any) error {
 	}
 }
 
+// TODO: Refactor pSepak. In fact refactor all the speak routines
+func (g *Game) pSpeak(msg int32, mode SpeakType, blank bool, skip int32, args ...any) {
+
+	var err error
+	var output string
+
+	switch mode {
+	case Touch:
+		output, err = g.vspeak(dungeon.Objects[msg].Inventory, blank, args...)
+
+	case Look:
+		output, err = g.vspeak(dungeon.Objects[msg].Descriptions[skip], blank, args...)
+
+	case Hear:
+		output, err = g.vspeak(dungeon.Objects[msg].Sounds[skip], blank, args...)
+
+	case Study:
+		output, err = g.vspeak(dungeon.Objects[msg].Texts[skip], blank, args...)
+
+	case Change:
+		output, err = g.vspeak(dungeon.Objects[msg].Changes[skip], blank, args...)
+
+	}
+
+	if err != nil {
+		g.Output = fmt.Sprintf("Error: %s", err.Error())
+	} else {
+		g.Output = g.Output + "\n\n" + output
+	}
+
+}
+
 // TODO: This can probably be refactored to be more go like
 func (g *Game) vspeak(msg string, blank bool, args ...any) (string, error) {
 
@@ -450,7 +482,7 @@ func (g *Game) vspeak(msg string, blank bool, args ...any) (string, error) {
 		}
 	}
 
-	g.Output = renderedString
+	//g.Output = renderedString
 	return renderedString, nil
 }
 
@@ -962,6 +994,88 @@ func (g *Game) move(object int32, where int32) {
 	g.drop(object, where)
 }
 
+func (g *Game) PlayerMove(loc int32) {
+	//TODO: Implement PlayerMove. Does this need to be exported?
+}
+
+func (g *Game) ListObjects() {
+	if !g.dark() {
+		g.Locs[g.Loc].Abbrev++
+
+		for i := g.Locs[g.Loc].Atloc; i != 0; i = g.Link[i] {
+			obj := i
+
+			if obj > dungeon.NOBJECTS {
+				obj -= dungeon.NOBJECTS
+			}
+
+			if obj == int32(dungeon.STEPS) && g.toting(int(dungeon.NUGGET)) {
+				continue
+			}
+
+			/* (ESR) Warning: it looks like you could get away with
+			 * running this code only on objects with the treasure
+			 * property set. Nope.  There is mystery here.
+			 */
+
+			if g.objectIsStashedOrUnseen(int(obj)) {
+				if g.Closed {
+					continue
+				}
+
+				g.objectSetFound(int(obj))
+
+				if obj == int32(dungeon.RUG) {
+					g.Objects[dungeon.RUG].Prop = dungeon.RUG_DRAGON
+				}
+
+				if obj == int32(dungeon.CHAIN) {
+					g.Objects[dungeon.CHAIN].Prop = dungeon.CHAINING_BEAR
+				}
+
+				if obj == int32(dungeon.EGGS) {
+					g.Seenbigwords = true
+				}
+
+				g.Tally--
+
+				/*  Note: There used to be a test here to see
+				 * whether the player had blown it so badly that
+				 * he could never ever see the remaining
+				 * treasures, and if so the lamp was zapped to
+				 *  35 turns.  But the tests were too
+				 * simple-minded; things like killing the bird
+				 * before the snake was gone (can never see
+				 * jewelry), and doing it "right" was hopeless.
+				 * E.G., could cross troll bridge several times,
+				 * using up all available treasures, breaking
+				 * vase, using coins to buy batteries, etc., and
+				 * eventually never be able to get across again.
+				 * If bottle were left on far side, could then
+				 *  never get eggs or trident, and the effects
+				 * propagate.  So the whole thing was flushed.
+				 * anyone who makes such a gross blunder isn't
+				 * likely to find everything else anyway (so
+				 * goes the rationalisation). */
+
+			}
+
+			kk := g.Objects[obj].Prop
+
+			if obj == int32(dungeon.STEPS) {
+				if g.Loc == g.Objects[int32(dungeon.STEPS)].Fixed {
+					kk = dungeon.STEPS_UP
+				} else {
+					kk = dungeon.STEPS_DOWN
+				}
+			}
+
+			g.pSpeak(obj, Look, true, kk)
+
+		}
+	}
+}
+
 // TODO: refactor these perhaps
 func (g *Game) at(object int32) bool {
 	return g.Objects[object].Place == g.Loc ||
@@ -991,8 +1105,24 @@ func (g *Game) objectIsStashed(object int) bool {
 	return g.Objects[object].Prop < STATE_NOTFOUND
 }
 
+func (g *Game) objectIsStashedOrUnseen(object int) bool {
+	return g.Objects[object].Prop < 0
+}
+
+func (g *Game) objectSetFound(object int) bool {
+	return g.Objects[object].Prop == STATE_FOUND
+}
+
 func (g *Game) objectIsFound(object int) bool {
 	return g.Objects[object].Prop == STATE_FOUND
+}
+
+func (g *Game) LocForced() bool {
+	return condbit(g.Loc, dungeon.COND_FORCED)
+}
+
+func (g *Game) MoveHere() {
+	g.PlayerMove(int32(dungeon.HERE))
 }
 
 /*
@@ -1036,6 +1166,7 @@ func condbit(L int32, N int32) bool {
 	return tstbit(dungeon.Conditions[L], N)
 }
 
+// TODO: Could refactor to use LocForced as defined above
 func forced(location int32) bool {
 	return condbit(location, dungeon.COND_FORCED)
 }

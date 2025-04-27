@@ -63,7 +63,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		}
 	default:
+		// No command to process yet
+
 		m.game.DescribeLocation()
+
+		if m.game.LocForced() {
+			m.game.MoveHere()
+		}
+
+		m.game.ListObjects()
 
 	case tea.WindowSizeMsg: // Handle window resize
 		m.input.Width = msg.Width // Adjust input width
