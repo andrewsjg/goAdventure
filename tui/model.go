@@ -30,15 +30,15 @@ func initialModel(game advent.Game) model {
 	ti.Width = 20
 
 	return model{
-		input:  ti,
-		output: game.Start(),
-		debug:  fmt.Sprintf("ZZWORD: %s\nSeedval: %d\n", string(game.Zzword[:]), game.Seedval),
-		game:   game,
+		input: ti,
+		debug: fmt.Sprintf("ZZWORD: %s\nSeedval: %d\n", string(game.Zzword[:]), game.Seedval),
+		game:  game,
 	}
 }
 
 func NewAdventure(game advent.Game) *tea.Program {
 	m := initialModel(game)
+
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
 	return p

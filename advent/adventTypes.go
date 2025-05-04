@@ -5,7 +5,7 @@ import "github.com/andrewsjg/goAdventure/dungeon"
 type Game struct {
 	QueryFlag       bool
 	QueryResponse   string
-	OnQueryResponse func(response string) string `json:"-"`
+	OnQueryResponse func(response string, game *Game) string `json:"-"`
 	Output          string
 	LcgX            int32
 	Abbnum          int32
@@ -105,6 +105,49 @@ const (
 
 	WORD_EMPTY = 0
 )
+
+type CmdState int
+
+const (
+	EMPTY CmdState = iota
+	RAW
+	TOKENISED
+	GIVEN
+	PREPROCESSED
+	EXECUTED
+)
+
+type SpeechPart int
+
+const (
+	Unknown SpeechPart = iota
+	Intransitive
+	Transitive
+)
+
+type WordType int
+
+const (
+	NO_WORD_TYPE WordType = iota
+	MOTION
+	OBJECT
+	ACTION
+	NUMERIC
+)
+
+type Command_Word struct {
+	Raw      string
+	ID       int
+	WordType WordType
+}
+
+type Command struct {
+	Part     SpeechPart
+	Word     [2]Command_Word
+	Verb     int
+	Obj      int
+	CmdState CmdState
+}
 
 type Save struct {
 	Magic   string

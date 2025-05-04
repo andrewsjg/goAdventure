@@ -8,8 +8,6 @@ import (
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
-	// Move all the game objects.
-	// TODO: Check if this is a good place for this.
 	m.game.DoMove()
 
 	var cmd tea.Cmd
@@ -28,6 +26,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			if m.game.QueryFlag {
+
 				m.game.QueryResponse = m.input.Value()
 				m.game.QueryFlag = false
 
@@ -37,7 +36,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				if m.game.OnQueryResponse != nil {
 					m.debug = fmt.Sprintf("Query Response: %s Calling OnQueryResponse \n", m.game.QueryResponse)
-					m.game.OnQueryResponse(m.game.QueryResponse)
+					m.game.OnQueryResponse(m.game.QueryResponse, &m.game)
 
 					m.output = m.game.Output
 
@@ -65,7 +64,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	default:
 		// No command to process yet
 
-		m.game.DescribeLocation()
+		//m.game.DescribeLocation()
 
 		if m.game.LocForced() {
 			m.game.MoveHere()

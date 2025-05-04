@@ -36,6 +36,9 @@ func NewGame(seed int, restoreFileName string, autoSaveFileName string, logFileN
 	game.Abbnum = 5
 	game.Foobar = WORD_EMPTY
 
+	// Initial Welcom
+	game.Output = dungeon.Arbitrary_Messages[dungeon.WELCOME_YOU]
+
 	if debug {
 		fmt.Println("Debug mode enabled")
 	}
@@ -198,67 +201,178 @@ func NewGame(seed int, restoreFileName string, autoSaveFileName string, logFileN
 	return game
 }
 
-func (g *Game) Start() string {
+func (g *Game) CheckHints() {
 
-	return dungeon.Arbitrary_Messages[dungeon.WELCOME_YOU]
-}
+	if dungeon.Conditions[g.Loc] >= g.Conds {
+		for hint := 0; hint < dungeon.NHINTS; hint++ {
+			{
+				if g.Hints[hint].Used {
+					continue
+				}
 
-func (g *Game) ProcessCommand(command string) error {
+				if !condbit(g.Loc, int32(hint+1+dungeon.COND_HBASE)) {
+					g.Hints[hint].Lc = -1
+				}
+				g.Hints[hint].Lc++
 
-	var err error
-	//g.Output = fmt.Sprintf("CMD: %s LOC: %d", command, g.Loc)
+				/*  Come here if the player has been int enough at required loc(s)
+				 * for some unused hint. */
 
-	cmd := strings.ToUpper(command)
+				if g.Hints[hint].Lc >= int32(dungeon.Hints[hint].Turns) {
 
-	// Game start condition
-	// If this is the start of a new game and the command is yes
-	// then the player has asked for instructions. This is kind of a kludge.
-	// Can probably improve by using AskQuestion.
+					switch hint {
 
-	if g.Settings.NewGame && strings.Contains(cmd, "Y") {
-		g.Output = dungeon.Arbitrary_Messages[dungeon.CAVE_NEARBY]
-		g.Novice = true
-		g.Limit = NOVICELIMIT // Numner of turns allowed for a novice player
+					case 0:
+						// Cave
+						if g.Objects[dungeon.GRATE].Prop == dungeon.GRATE_CLOSED && !g.here(dungeon.KEYS) {
+							break
+						}
+						g.Hints[hint].Lc = 0
+						return
+					case 1:
+						// bird
+						if g.Objects[dungeon.BIRD].Place == g.Loc && g.toting(dungeon.ROD) &&
+							g.Oldobj == int32(dungeon.BIRD) {
 
-		// Reset new game flag since the game has now progressed
-		g.Settings.NewGame = false
+							break
 
-	} else if g.Settings.NewGame && strings.Contains(cmd, "N") {
-		g.Output = dungeon.Arbitrary_Messages[dungeon.NO_MESSAGE]
-		// Reset new game flag since the game has now progressed
-		g.Settings.NewGame = false
-		g.DescribeLocation()
+						}
+						return
+					case 2:
+						// Snake
+						if g.here(dungeon.SNAKE) && !g.here(dungeon.BIRD) {
+							break
+						}
 
-	} else if g.Settings.EnableDebug && cmd == "ZZTEST1" {
-		g.croak()
+						g.Hints[hint].Lc = 0
+						return
+					case 3:
+						// Maze
 
-	} else if g.Settings.EnableDebug && cmd == "ZZTEST2" {
+						if g.Locs[g.Loc].Atloc == int32(dungeon.NO_OBJECT) &&
+							g.Locs[g.Oldloc].Atloc == int32(dungeon.NO_OBJECT) &&
+							g.Locs[g.Oldlc2].Atloc == int32(dungeon.NO_OBJECT) &&
+							g.Holdng > 1 {
+							break
+						}
+						g.Hints[hint].Lc = 0
+						return
 
-		g.Output = "ZZTEST2. Old Output: " + g.Output
+					case 4:
+						// Dark
+						if !g.objectIsNotFound(dungeon.EMERALD) && g.objectIsNotFound(dungeon.PYRAMID) {
+							break
+						}
+						g.Hints[hint].Lc = 0
+						return
+					case 5:
+						// Witt
+						break
 
-	} else if g.QueryFlag {
-		// Game has asked a question. The command will be the response
-		g.QueryResponse = cmd
-		g.QueryFlag = false
+					case 6:
+						// Urn
+						if g.Dflag == 0 {
+							break
+						}
+						g.Hints[hint].Lc = 0
+						return
 
-	} else {
+					case 7:
+						// Woods
+						if g.Locs[g.Loc].Atloc == int32(dungeon.NO_OBJECT) &&
+							g.Locs[g.Oldloc].Atloc == int32(dungeon.NO_OBJECT) &&
+							g.Locs[g.Oldlc2].Atloc == int32(dungeon.NO_OBJECT) {
 
-		//g.DescribeLocation()
+							break
+						}
+						return
+					case 8:
+						// Ogre
 
-		// We just got some input from the user
+						i := g.atDwrf(g.Loc)
+						if i < 0 {
+							g.Hints[hint].Lc = 0
+							return
+						}
 
-		// Game in progress
+						if g.here(dungeon.OGRE) && i == 0 {
+							break
+						}
+						return
 
-		// Do we need to move?
+					case 9:
+						// Jade
 
-		// Describe location
+						if g.Tally == 1 && g.objectIsStashedOrUnseen(dungeon.JADE) {
+							break
+						}
+						g.Hints[hint].Lc = 0
+						return
 
+					default:
+						// This should never happen
+						// TODO: Pring some error here
+
+					}
+
+					/* Fall through to hint display */
+
+					g.Hints[hint].Lc = 0
+
+					wantHint := func(response string, game *Game) string {
+						if !strings.Contains(strings.ToUpper(response), "Y") {
+							err := game.speak(dungeon.Arbitrary_Messages[dungeon.OK_MAN])
+
+							if err != nil {
+								fmt.Println("Error: ", err.Error())
+								return fmt.Sprintf("Error: %s", err.Error())
+							}
+
+							return ""
+						}
+
+						game.speak(dungeon.Hints[hint].Hint)
+
+						if game.Hints[hint].Used && game.Limit > WARNTIME {
+							game.Limit += int32(WARNTIME * dungeon.Hints[1].Penalty)
+						}
+
+						return dungeon.Hints[hint].Hint
+					}
+
+					hintQuestion := func(response string, game *Game) string {
+
+						if !strings.Contains(strings.ToUpper(response), "Y") {
+
+							err := game.speak(dungeon.Arbitrary_Messages[dungeon.OK_MAN])
+
+							if err != nil {
+								fmt.Println("Error: ", err.Error())
+								return fmt.Sprintf("Error: %s", err.Error())
+							}
+
+							return ""
+						}
+
+						game.rspeak(int32(dungeon.HINT_COST), dungeon.Hints[hint].Penalty)
+
+						game.Output = game.Output + "\n\n" + dungeon.Arbitrary_Messages[dungeon.WANT_HINT]
+
+						game.AskQuestion(game.Output, wantHint)
+
+						return response
+					}
+
+					g.AskQuestion(dungeon.Hints[hint].Question, hintQuestion)
+
+				}
+			}
+		}
 	}
-
-	return err
 }
 
 func (g *Game) DescribeLocation() {
+
 	msg := dungeon.Locations[g.Loc].Description.Small
 
 	if (math.Mod(float64(g.Locs[g.Loc].Abbrev), float64(g.Abbnum)) == 0) || msg == "" {
@@ -346,16 +460,18 @@ func (g *Game) rspeak(vocab int32, args ...any) error {
 	} else {
 
 		g.Output = msg
+
 		return nil
 	}
 }
 
 // Speak a specified string
 func (g *Game) speak(msg string, args ...any) error {
-	msg, err := g.vspeak(msg, true, args...)
+	msg, err := g.vspeak(msg, false, args...)
 
 	if err != nil {
 		return err
+
 	} else {
 
 		g.Output = msg
@@ -415,8 +531,9 @@ func (g *Game) vspeak(msg string, blank bool, args ...any) (string, error) {
 		renderedString = strings.Replace(renderedString, "floor", "ground", -1)
 	}
 
-	if strings.Contains("%d", renderedString) {
-		digits := findOccurrences("%d", renderedString)
+	if strings.Contains(renderedString, "%d") {
+
+		digits := findOccurrences(renderedString, "%d")
 
 		// if we are rendering digits into a string then the passed args
 		// should all be digits.
@@ -450,7 +567,7 @@ func (g *Game) vspeak(msg string, blank bool, args ...any) (string, error) {
 
 	}
 
-	if strings.Contains("%s", renderedString) {
+	if strings.Contains(renderedString, "%s") {
 		strings := findOccurrences("%s", renderedString)
 
 		// if we are rendering strings into a string then the passed args
@@ -477,15 +594,15 @@ func (g *Game) vspeak(msg string, blank bool, args ...any) (string, error) {
 		renderedString = replaceOccurrences(renderedString, "%s", strVals)
 	}
 
-	if strings.Contains("%S", renderedString) {
+	if strings.Contains(renderedString, "%S") {
 		if pluralise {
 			renderedString = strings.Replace(renderedString, "%S", "s", -1)
 		} else {
 			renderedString = strings.Replace(renderedString, "%S", "", -1)
 		}
 	}
+	// g.Output = renderedString
 
-	//g.Output = renderedString
 	return renderedString, nil
 }
 
@@ -551,7 +668,7 @@ func (g *Game) croak() {
 	}
 
 	// Ask if they want to try again
-	g.AskQuestion(query, func(response string) string {
+	g.AskQuestion(query, func(response string, game *Game) string {
 		if strings.Contains(strings.ToUpper(response), "Y") {
 
 			/* If the player wishes to continue, we empty the liquids in the
@@ -590,14 +707,6 @@ func (g *Game) croak() {
 		return croakOutput
 	})
 
-}
-
-func (g *Game) AskQuestion(query string, callback func(response string) string) {
-	g.QueryFlag = true
-	g.QueryResponse = ""
-
-	g.Output = query
-	g.OnQueryResponse = callback
 }
 
 func (g *Game) dwarfmove() bool {
@@ -1003,7 +1112,9 @@ func (g *Game) PlayerMove(loc int32) {
 
 func (g *Game) ListObjects() {
 	if !g.dark() {
-		g.Locs[g.Loc].Abbrev++
+
+		// TODO: Figure out how to handle this better
+		//g.Locs[g.Loc].Abbrev++
 
 		for i := g.Locs[g.Loc].Atloc; i != 0; i = g.Link[i] {
 			obj := i
@@ -1079,103 +1190,29 @@ func (g *Game) ListObjects() {
 	}
 }
 
-// TODO: refactor these perhaps
-func (g *Game) at(object int32) bool {
-	return g.Objects[object].Place == g.Loc ||
-		g.Objects[object].Fixed == g.Loc
-}
+func (g *Game) atDwrf(where int32) int {
+	/*  Return the index of first dwarf at the given location, zero if no
+	 * dwarf is there (or if dwarves not active yet), -1 if all dwarves are
+	 * dead.  Ignore the pirate (6th dwarf). */
 
-func (g *Game) here(object int) bool {
-	return g.at(int32(object)) || g.toting(object)
-}
+	at := 0
 
-func (g *Game) toting(object int) bool {
-	return g.Objects[object].Place == CARRIED
-}
+	if g.Dflag < 2 {
+		return at
+	}
 
-func (g *Game) objectIsNotFound(object int) bool {
-	return g.Objects[object].Prop == STATE_NOTFOUND
-}
+	at = -1
+	for i := 1; i <= dungeon.NDWARVES-1; i++ {
+		if g.Dwarves[i].Loc == where {
+			return i
+		}
 
-func (g *Game) dark() bool {
+		if g.Dwarves[i].Loc != 0 {
+			at = 0
+		}
+	}
 
-	return !condbit(g.Loc, dungeon.COND_LIT) &&
-		(g.Objects[dungeon.LAMP].Prop == dungeon.LAMP_DARK ||
-			!g.here(int(dungeon.LAMP)))
-}
-
-func (g *Game) objectIsStashed(object int) bool {
-	return g.Objects[object].Prop < STATE_NOTFOUND
-}
-
-func (g *Game) objectIsStashedOrUnseen(object int) bool {
-	return g.Objects[object].Prop < 0
-}
-
-func (g *Game) objectSetFound(object int) bool {
-	return g.Objects[object].Prop == STATE_FOUND
-}
-
-func (g *Game) objectIsFound(object int) bool {
-	return g.Objects[object].Prop == STATE_FOUND
-}
-
-func (g *Game) LocForced() bool {
-	return condbit(g.Loc, dungeon.COND_FORCED)
-}
-
-func (g *Game) MoveHere() {
-	g.PlayerMove(int32(dungeon.HERE))
-}
-
-/*
- *  DESTROY(N)  = Get rid of an item by putting it in LOC_NOWHERE
- *  MOD(N,M)    = Arithmetic modulus
- *  TOTING(OBJ) = true if the OBJ is being carried
- *  AT(OBJ)     = true if on either side of two-placed object
- *  HERE(OBJ)   = true if the OBJ is at "LOC" (or is being carried)
- *  CNDBIT(L,N) = true if COND(L) has bit n set (bit 0 is units bit)
- *  LIQUID()    = object number of liquid in bottle
- *  LIQLOC(LOC) = object number of liquid (if any) at LOC
- *  FORCED(LOC) = true if LOC moves without asking for input (COND=2)
- *  DARK(LOC)   = true if location "LOC" is dark
- *  PCT(N)      = true N% of the time (N integer from 0 to 100)
- *  GSTONE(OBJ) = true if OBJ is a gemstone
- *  FOREST(LOC) = true if LOC is part of the forest
- *  OUTSID(LOC) = true if location not in the cave
- *  INSIDE(LOC) = true if location is in the cave or the building at the
- * beginning of the game INDEEP(LOC) = true if location is in the Hall of Mists
- * or deeper BUG(X)      = report bug and exit
- */
-
-func forest(location int32) bool {
-	return condbit(location, dungeon.COND_FOREST)
-}
-
-func outside(loction int32) bool {
-	return condbit(loction, dungeon.COND_ABOVE) || forest(loction)
-}
-
-func inside(location int32) bool {
-	return !outside(location) || location == int32(dungeon.LOC_BUILDING)
-}
-
-func tstbit(mask int32, bit int32) bool {
-
-	return (mask & (1 << bit)) != 0
-}
-
-func condbit(L int32, N int32) bool {
-	return tstbit(dungeon.Conditions[L], N)
-}
-
-// TODO: Could refactor to use LocForced as defined above
-func forced(location int32) bool {
-	return condbit(location, dungeon.COND_FORCED)
-}
-
-func indeep(location int32) bool {
-	return condbit(location, dungeon.COND_DEEP)
+	return at
 }
 
 /*  Print message X, wait for yes/no answer.  If yes, print Y and return
