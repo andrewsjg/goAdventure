@@ -10,11 +10,11 @@ import (
 
 // Define the model
 type model struct {
-	input  textinput.Model
-	output string
-	debug  string
-
-	game advent.Game
+	input          textinput.Model
+	output         string
+	debug          string
+	previousOutput string
+	game           advent.Game
 }
 
 func (m model) Init() tea.Cmd {

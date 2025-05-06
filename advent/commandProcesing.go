@@ -1,15 +1,61 @@
 package advent
 
 import (
-	"fmt"
 	"strings"
 	"unicode"
 
 	"github.com/andrewsjg/goAdventure/dungeon"
 )
 
-func (g *Game) getCommand(command string) Command {
+// This take the command and tokenises it into a command structure.
+func (g *Game) tokeniseCommand(command string) Command {
 	cmd := Command{}
+
+	if countWords(command) > 2 {
+
+		g.OutputType = 1
+		g.rspeak(int32(dungeon.TWO_WORDS))
+		return cmd
+	}
+
+	/* (ESR) In oldstyle mode, simulate the uppercasing and truncating
+	 * effect on raw tokens of packing them into sixbit characters, 5
+	 * to a 32-bit word.  This is something the FORTRAN version did
+	 * because archaic FORTRAN had no string types.  Don Wood's
+	 * mechanical translation of 2.5 to C retained the packing and
+	 * thus this misfeature.
+	 *
+	 * It's philosophically questionable whether this is the right
+	 * thing to do even in oldstyle mode.  On one hand, the text
+	 * mangling was not authorial intent, but a result of limitations
+	 * in their tools. On the other, not simulating this misbehavior
+	 * goes against the goal of making oldstyle as accurate as
+	 * possible an emulation of the original UI.
+	 */
+
+	// Leaving this in here in case I want to implement 'oldstyle' mode later.
+	/*
+			 if (settings.oldstyle) {
+				cmd->word[0].raw[TOKLEN + TOKLEN] =
+				    cmd->word[1].raw[TOKLEN + TOKLEN] = '\0';
+				for (size_t i = 0; i < strlen(cmd->word[0].raw); i++) {
+					cmd->word[0].raw[i] = toupper(cmd->word[0].raw[i]);
+				}
+				for (size_t i = 0; i < strlen(cmd->word[1].raw); i++) {
+					cmd->word[1].raw[i] = toupper(cmd->word[1].raw[i]);
+				}
+		}
+	*/
+	words := []Command_Word{}
+
+	for _, word := range SplitWords(command) {
+		tmpWord := Command_Word{}
+		tmpWord.Raw = strings.ToUpper(word)
+
+		words = append(words, tmpWord)
+	}
+
+	cmd.Word = words
 
 	return cmd
 }
@@ -65,64 +111,26 @@ func (g *Game) ProcessCommand(command string) error {
 
 	} else if g.Settings.EnableDebug && cmd == "ZZTEST" {
 
-		wantHint := func(response string, game *Game) string {
-			if !strings.Contains(strings.ToUpper(response), "Y") {
-				err := game.speak(dungeon.Arbitrary_Messages[dungeon.OK_MAN])
-
-				if err != nil {
-					fmt.Println("Error: ", err.Error())
-					return fmt.Sprintf("Error: %s", err.Error())
-				}
-
-				return ""
-			}
-
-			game.speak(dungeon.Hints[1].Hint)
-
-			if game.Hints[1].Used && game.Limit > WARNTIME {
-				game.Limit += int32(WARNTIME * dungeon.Hints[1].Penalty)
-			}
-
-			return dungeon.Hints[1].Hint
-		}
-
-		hintQuestion := func(response string, game *Game) string {
-
-			if !strings.Contains(strings.ToUpper(response), "Y") {
-
-				err := game.speak(dungeon.Arbitrary_Messages[dungeon.OK_MAN])
-
-				if err != nil {
-					fmt.Println("Error: ", err.Error())
-					return fmt.Sprintf("Error: %s", err.Error())
-				}
-
-				return ""
-			}
-
-			game.rspeak(int32(dungeon.HINT_COST), dungeon.Hints[1].Penalty)
-
-			game.Output = game.Output + "\n\n" + dungeon.Arbitrary_Messages[dungeon.WANT_HINT]
-
-			game.AskQuestion(game.Output, wantHint)
-
-			return response
-		}
-
-		g.AskQuestion(dungeon.Hints[1].Question, hintQuestion)
-
-		/*	} else if g.QueryFlag {
-			// Game has asked a question. The command will be the response
-			fmt.Println("QueryFlag set. Query Response: ", cmd)
-			g.QueryResponse = cmd
-			g.QueryFlag = false */
+		cmd := "LOOK STREAM MOUNTAIN"
+		g.tokeniseCommand(cmd)
 
 	} else {
 
 		// We just got some input from the user
 
 		// Put the input into a command structure
-		//cmd := g.getCommand(command)
+		cmd := g.tokeniseCommand(command)
+
+		if g.Settings.EnableDebug {
+			if len(cmd.Word) == 1 {
+
+				g.Output = cmd.Word[0].Raw
+			} else if len(cmd.Word) == 2 {
+				g.Output = cmd.Word[0].Raw + " " + cmd.Word[1].Raw
+			} else {
+				//g.DescribeLocation()
+			}
+		}
 
 		if g.Closed {
 			/*  If closing time, check for any stashed
@@ -190,4 +198,12 @@ func countWords(input string) int {
 	})
 
 	return len(words)
+}
+
+func SplitWords(input string) []string {
+	// Use FieldsFunc to split the string based on word boundaries.
+	words := strings.FieldsFunc(input, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsNumber(r)
+	})
+	return words
 }
