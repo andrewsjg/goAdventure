@@ -7,6 +7,7 @@ type Game struct {
 	QueryResponse   string
 	OnQueryResponse func(response string, game *Game) string `json:"-"`
 	Output          string
+	OutputType      int // 0 = Regular, 1 == temporary message
 	LcgX            int32
 	Abbnum          int32
 	Bonus           ScoreBonus
@@ -143,7 +144,7 @@ type Command_Word struct {
 
 type Command struct {
 	Part     SpeechPart
-	Word     [2]Command_Word
+	Word     []Command_Word
 	Verb     int
 	Obj      int
 	CmdState CmdState

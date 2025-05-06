@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -16,6 +17,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg: // Handle keyboard input
 		switch msg.String() {
 		case "enter": // When the user presses Enter
+
+			if m.game.OutputType != 1 {
+				m.previousOutput = m.output
+			}
 
 			// TODO: Maybe the game should handle the exit
 			// condition in the processcommand function?
@@ -41,7 +46,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.output = m.game.Output
 
 				} else {
-					m.debug = fmt.Sprintf("No OnQueryResponse function set\n")
+					m.debug = "No OnQueryResponse function set\n"
 				}
 
 			} else {
@@ -57,10 +62,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
+			if m.game.OutputType == 1 {
+				m.debug = fmt.Sprintf("OutputType: %d Previous Output: %s \n", m.game.OutputType, m.previousOutput)
+				m.game.OutputType = 0 // Reset the output type
+				// If the output type is 1, set a timer to clear the message
+				return m, temporaryMessageTimer(2 * time.Second)
+			}
+
 		case "ctrl+c": // Handle Ctrl+C to quit
 			return m, tea.Quit
 
 		}
+
+	case temporaryMessageExpiredMsg:
+		m.debug = fmt.Sprintf("Timer expired, restoring previous output: %s\n", m.previousOutput)
+		// Restore the previous output when the timer expires
+		m.game.Output = m.previousOutput
+		m.previousOutput = "" // Clear the saved output
+		m.game.OutputType = 0 // Reset the output type
+
 	default:
 		// No command to process yet
 
@@ -81,3 +101,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	return m, cmd
 }
+
+func temporaryMessageTimer(duration time.Duration) tea.Cmd {
+	return tea.Tick(duration, func(t time.Time) tea.Msg {
+		return temporaryMessageExpiredMsg{}
+	})
+}
+
+// Message type for when the timer expires
+type temporaryMessageExpiredMsg struct{}
