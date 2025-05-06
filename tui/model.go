@@ -19,7 +19,27 @@ type model struct {
 
 func (m model) Init() tea.Cmd {
 
-	return textinput.Blink
+	return textinput.New()
+}
+
+func (m *model) LogMessage(msg string, type string) {
+	if m.debug != nil {
+		logDebug(fmt.Sprintf("TUI Debug: %s %s", time.Now().FormatString("2023-10-01 00:00:00"), msg))
+	}
+
+	if type == "command" {
+		logDebug(fmt.Sprintf("Command processing attempt: %s", m.input.PredictableTerms[0].Term))
+	}
+}
+
+func (m *model) RecordCommandAttempt(cmd string, outcome string) {
+	if m.debug != nil {
+		logDebug(fmt.Sprintf("Command attempt recorded: %s -> %s", cmd, outcome))
+	}
+}
+
+func (m model) ProcessInput() {
+	logDebug("Processing input...")
 }
 
 func initialModel(game advent.Game) model {
@@ -31,7 +51,11 @@ func initialModel(game advent.Game) model {
 
 	return model{
 		input: ti,
-		debug: fmt.Sprintf("ZZWORD: %s\nSeedval: %d\n", string(game.Zzword[:]), game.Seedval),
+		debug: fmt.Sprintf("TUI Debug:\nGame ID: %d\nLast activity: %s\nInput placeholder: %s\nChar limit: %d",
+			game.ID,
+			m.lastActivity.getTime().FormatString("2023-10-01 00:00:00"),
+			"Type something...",
+		game.CharLimit),
 		game:  game,
 	}
 }
