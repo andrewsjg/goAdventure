@@ -27,3 +27,4 @@ go.work.sum
 dungeon/dungeon.go
 dungeon/dungeonTypes.go
 *.save
+.aider*
