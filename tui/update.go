@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/andrewsjg/goAdventure/advent"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -18,9 +19,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "enter": // When the user presses Enter
 
-			if m.game.OutputType != 1 {
-				m.previousOutput = m.output
-			}
+			m.previousOutput = m.game.Output
+
+			//			}
 
 			// TODO: Maybe the game should handle the exit
 			// condition in the processcommand function?
@@ -62,10 +63,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-			if m.game.OutputType == 1 {
+			// TODO: I dont know if I like this. Maybe we need another message panel?
+			// If the output type is 1, set a timer to clear the message
+			if m.game.OutputType == advent.MSG_TEMP {
 				m.debug = fmt.Sprintf("OutputType: %d Previous Output: %s \n", m.game.OutputType, m.previousOutput)
-				m.game.OutputType = 0 // Reset the output type
-				// If the output type is 1, set a timer to clear the message
+				m.game.OutputType = advent.MSG_REG // Reset the output type
+
 				return m, temporaryMessageTimer(2 * time.Second)
 			}
 
@@ -76,15 +79,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case temporaryMessageExpiredMsg:
 		m.debug = fmt.Sprintf("Timer expired, restoring previous output: %s\n", m.previousOutput)
+
 		// Restore the previous output when the timer expires
 		m.game.Output = m.previousOutput
 		m.previousOutput = "" // Clear the saved output
+
 		m.game.OutputType = 0 // Reset the output type
 
 	default:
 		// No command to process yet
-
-		//m.game.DescribeLocation()
 
 		if m.game.LocForced() {
 			m.game.MoveHere()

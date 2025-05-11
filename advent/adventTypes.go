@@ -105,6 +105,12 @@ const (
 	GAMELIMIT     = 330
 
 	WORD_EMPTY = 0
+
+	MSG_TEMP = 1
+	MSG_REG  = 0
+
+	TOKLEN         = 5
+	WORD_NOT_FOUND = -1
 )
 
 type CmdState int

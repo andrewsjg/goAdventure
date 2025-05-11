@@ -465,6 +465,21 @@ func (g *Game) rspeak(vocab int32, args ...any) error {
 	}
 }
 
+// Speak a temnporary message
+func (g *Game) tspeak(vocab int32, args ...any) error {
+	msg, err := g.vspeak(dungeon.Arbitrary_Messages[vocab], false, args...)
+
+	if err != nil {
+		return err
+	} else {
+
+		g.OutputType = 1
+		g.Output = msg
+
+		return nil
+	}
+}
+
 // Speak a specified string
 func (g *Game) speak(msg string, args ...any) error {
 	msg, err := g.vspeak(msg, false, args...)

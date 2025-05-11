@@ -13,8 +13,7 @@ func (g *Game) tokeniseCommand(command string) Command {
 
 	if countWords(command) > 2 {
 
-		g.OutputType = 1
-		g.rspeak(int32(dungeon.TWO_WORDS))
+		g.tspeak(int32(dungeon.TWO_WORDS))
 		return cmd
 	}
 
@@ -52,12 +51,109 @@ func (g *Game) tokeniseCommand(command string) Command {
 		tmpWord := Command_Word{}
 		tmpWord.Raw = strings.ToUpper(word)
 
+		tmpWord = getVocabMetaData(tmpWord.Raw)
+
 		words = append(words, tmpWord)
 	}
 
 	cmd.Word = words
 
 	return cmd
+}
+
+func (g *Game) getVocabMetaData(rawWord string) Command_Word {
+
+	word := Command_Word{}
+	word.Raw = rawWord
+	word.ID = WORD_EMPTY
+	word.WordType = NO_WORD_TYPE
+
+	if rawWord == "" {
+		return word
+	}
+
+	refNum := getMotionVocabID(rawWord, g.Settings.OldStyle)
+
+	if refNum != WORD_NOT_FOUND {
+		word.ID = refNum
+		word.WordType = MOTION
+		return word
+	}
+
+	refNum = getObjectVocabID(rawWord)
+
+	if refNum != WORD_NOT_FOUND {
+		word.ID = refNum
+		word.WordType = OBJECT
+		return word
+	}
+
+	refNum = getActionVocabID(rawWord, g.Settings.OldStyle)
+	if refNum != WORD_NOT_FOUND {
+		word.ID = refNum
+		word.WordType = ACTION
+		return word
+	}
+
+	// TODO: Test this
+	if strings.Compare(strings.ToUpper(rawWord), strings.ToUpper(string(g.Zzword[:]))) == 0 {
+		word.ID = dungeon.PART
+		word.WordType = NUMERIC
+		return word
+	}
+
+	return word
+}
+
+func getMotionVocabID(rawWord string, oldStyle bool) int {
+	for i := 0; i < dungeon.NMOTIONS; i++ {
+		for j := 0; j < dungeon.Motions[i].Words.N; j++ {
+			motionWord := dungeon.Motions[i].Words.Strs[j]
+			// Compare up to TOKLEN characters, case-insensitive
+			maxLen := TOKLEN
+			if len(rawWord) < TOKLEN {
+				maxLen = len(rawWord)
+			}
+			if len(motionWord) < maxLen {
+				maxLen = len(motionWord)
+			}
+			if strings.EqualFold(rawWord[:maxLen], motionWord[:maxLen]) &&
+				(len(rawWord) > 1 ||
+					!strings.ContainsRune(dungeon.Ignore, rune(rawWord[0])) ||
+					!oldStyle) {
+				return i
+			}
+		}
+	}
+
+	return WORD_NOT_FOUND
+}
+
+func getObjectVocabID(rawWord string) int {
+	for i := 0; i < dungeon.NOBJECTS+1; i++ {
+		for j := 0; j < dungeon.Objects[i].Words.N; j++ {
+			if strnCaseCmpEqual(rawWord, dungeon.Objects[i].Words.Strs[j], TOKLEN) {
+				return i
+			}
+		}
+	}
+
+	return WORD_NOT_FOUND
+}
+
+func getActionVocabID(rawWord string, oldStyle bool) int {
+	for i := 0; i < dungeon.NACTIONS; i++ {
+		for j := 0; j < dungeon.Actions[i].Words.N; j++ {
+			if strnCaseCmpEqual(rawWord, dungeon.Actions[i].Words.Strs[j], TOKLEN) &&
+				(len(rawWord) > 1 || !strings.ContainsRune(dungeon.Ignore, rune(rawWord[0]))) ||
+				!oldStyle {
+
+				return i
+			}
+		}
+	}
+
+	return WORD_NOT_FOUND
 }
 
 /* Pre-processes a command input to see if we need to tease out a few specific
@@ -113,6 +209,9 @@ func (g *Game) ProcessCommand(command string) error {
 
 		cmd := "LOOK STREAM MOUNTAIN"
 		g.tokeniseCommand(cmd)
+
+	} else if cmd == "" {
+		g.DescribeLocation()
 
 	} else {
 
@@ -206,4 +305,21 @@ func SplitWords(input string) []string {
 		return !unicode.IsLetter(r) && !unicode.IsNumber(r)
 	})
 	return words
+}
+
+func strnCaseCmpEqual(s1, s2 string, n int) bool {
+
+	s1 = strings.ToUpper(s1)
+	s2 = strings.ToUpper(s2)
+
+	// Limit the strings to n characters
+	if len(s1) > n {
+		s1 = s1[:n]
+	}
+	if len(s2) > n {
+		s2 = s2[:n]
+	}
+
+	// Compare case-insensitively
+	return strings.EqualFold(s1, s2)
 }
