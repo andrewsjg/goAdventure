@@ -51,7 +51,7 @@ func (g *Game) tokeniseCommand(command string) Command {
 		tmpWord := Command_Word{}
 		tmpWord.Raw = strings.ToUpper(word)
 
-		tmpWord = getVocabMetaData(tmpWord.Raw)
+		tmpWord = g.getVocabMetaData(tmpWord.Raw)
 
 		words = append(words, tmpWord)
 	}
