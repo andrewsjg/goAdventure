@@ -1,6 +1,7 @@
 package advent
 
 import (
+	"fmt"
 	"strings"
 	"unicode"
 
@@ -50,7 +51,6 @@ func (g *Game) tokeniseCommand(command string) Command {
 	for _, word := range SplitWords(command) {
 		tmpWord := Command_Word{}
 		tmpWord.Raw = strings.ToUpper(word)
-
 		tmpWord = g.getVocabMetaData(tmpWord.Raw)
 
 		words = append(words, tmpWord)
@@ -58,6 +58,9 @@ func (g *Game) tokeniseCommand(command string) Command {
 
 	cmd.Word = words
 
+	// Not sure this is going to matter the way we will
+	// process commands in this version.
+	cmd.CmdState = TOKENISED
 	return cmd
 }
 
@@ -106,6 +109,23 @@ func (g *Game) getVocabMetaData(rawWord string) Command_Word {
 }
 
 func getMotionVocabID(rawWord string, oldStyle bool) int {
+
+	for i := 0; i < dungeon.NMOTIONS; i++ {
+		for j := 0; j < dungeon.Motions[i].Words.N; j++ {
+
+			if strnCaseCmpEqual(rawWord, dungeon.Motions[i].Words.Strs[j], TOKLEN) &&
+				(len(rawWord) > 1 || !strings.Contains(strings.ToUpper(rawWord), strings.ToUpper(dungeon.Ignore)) ||
+					!oldStyle) {
+				return i
+			}
+		}
+	}
+
+	return WORD_NOT_FOUND
+}
+
+/*
+func getMotionVocabID(rawWord string, oldStyle bool) int {
 	for i := 0; i < dungeon.NMOTIONS; i++ {
 		for j := 0; j < dungeon.Motions[i].Words.N; j++ {
 			motionWord := dungeon.Motions[i].Words.Strs[j]
@@ -128,10 +148,13 @@ func getMotionVocabID(rawWord string, oldStyle bool) int {
 
 	return WORD_NOT_FOUND
 }
+*/
 
 func getObjectVocabID(rawWord string) int {
+
 	for i := 0; i < dungeon.NOBJECTS+1; i++ {
 		for j := 0; j < dungeon.Objects[i].Words.N; j++ {
+
 			if strnCaseCmpEqual(rawWord, dungeon.Objects[i].Words.Strs[j], TOKLEN) {
 				return i
 			}
@@ -145,8 +168,8 @@ func getActionVocabID(rawWord string, oldStyle bool) int {
 	for i := 0; i < dungeon.NACTIONS; i++ {
 		for j := 0; j < dungeon.Actions[i].Words.N; j++ {
 			if strnCaseCmpEqual(rawWord, dungeon.Actions[i].Words.Strs[j], TOKLEN) &&
-				(len(rawWord) > 1 || !strings.ContainsRune(dungeon.Ignore, rune(rawWord[0]))) ||
-				!oldStyle {
+				(len(rawWord) > 1 || !strings.ContainsRune(dungeon.Ignore, rune(rawWord[0])) ||
+					!oldStyle) {
 
 				return i
 			}
@@ -175,8 +198,22 @@ func getActionVocabID(rawWord string, oldStyle bool) int {
  * Returns true if pre-processing is complete, and we're ready to move to the
  * primary command processing, false otherwise. */
 
-func (g *Game) preProcessCommand(command string) string {
-	return ""
+func (g *Game) preProcessCommand(command Command) bool {
+
+	if command.Word[0].WordType == MOTION && command.Word[0].ID == dungeon.ENTER &&
+		(command.Word[1].ID == dungeon.STREAM || command.Word[1].ID == dungeon.WATER) {
+
+		if g.LiqLoc() == int32(dungeon.WATER) {
+			g.tspeak(int32(dungeon.FEET_WET))
+
+		} else {
+
+			g.rspeak(int32(dungeon.WHERE_QUERY))
+
+		}
+	}
+
+	return true
 }
 
 func (g *Game) ProcessCommand(command string) error {
@@ -207,8 +244,22 @@ func (g *Game) ProcessCommand(command string) error {
 
 	} else if g.Settings.EnableDebug && cmd == "ZZTEST" {
 
-		cmd := "LOOK STREAM MOUNTAIN"
-		g.tokeniseCommand(cmd)
+		// Should write this as a test
+
+		// No Word  == 0
+		// Motion   == 1
+		// Object   == 2
+		// Action   == 3
+		// Numeric  == 4
+
+		cmd := "Carry stream" // 3
+		// cmd := "Enter stream" // 1
+
+		//cmd := "LAMP STREAM" // 2
+
+		tokCmd := g.tokeniseCommand(cmd)
+
+		g.Output = fmt.Sprintf("ZZTEST: %d, %s\n", tokCmd.Word[0].WordType, tokCmd.Word[1].Raw)
 
 	} else if cmd == "" {
 		g.DescribeLocation()
@@ -220,16 +271,20 @@ func (g *Game) ProcessCommand(command string) error {
 		// Put the input into a command structure
 		cmd := g.tokeniseCommand(command)
 
-		if g.Settings.EnableDebug {
-			if len(cmd.Word) == 1 {
+		// TODO: This is just called here like this for initial testing
+		g.preProcessCommand(cmd)
 
-				g.Output = cmd.Word[0].Raw
-			} else if len(cmd.Word) == 2 {
-				g.Output = cmd.Word[0].Raw + " " + cmd.Word[1].Raw
-			} else {
-				//g.DescribeLocation()
-			}
-		}
+		/*
+			if g.Settings.EnableDebug {
+				if len(cmd.Word) == 1 {
+
+					g.Output = cmd.Word[0].Raw
+				} else if len(cmd.Word) == 2 {
+					g.Output = cmd.Word[0].Raw + " " + cmd.Word[1].Raw
+				} else {
+					//g.DescribeLocation()
+				}
+			} */
 
 		if g.Closed {
 			/*  If closing time, check for any stashed

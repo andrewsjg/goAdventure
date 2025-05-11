@@ -59,6 +59,17 @@ func (g *Game) MoveHere() {
 	g.PlayerMove(int32(dungeon.HERE))
 }
 
+func (g *Game) LiqLoc() int32 {
+	if condbit(g.Loc, dungeon.COND_FLUID) {
+		if condbit(g.Loc, dungeon.COND_OILY) {
+			return int32(dungeon.OIL)
+		}
+		return int32(dungeon.WATER)
+	}
+
+	return int32(dungeon.NO_OBJECT)
+}
+
 /*
  *  DESTROY(N)  = Get rid of an item by putting it in LOC_NOWHERE
  *  MOD(N,M)    = Arithmetic modulus
