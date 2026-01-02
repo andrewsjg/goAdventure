@@ -53,7 +53,7 @@ type Game struct {
 		Atloc  int32
 	}
 	Dwarves [dungeon.NDWARVES + 1]struct {
-		Seen   int32
+		Seen   bool
 		Loc    int32
 		Oldloc int32
 	}
@@ -121,6 +121,7 @@ const (
 	TOKENISED
 	GIVEN
 	PREPROCESSED
+	PROCESSING
 	EXECUTED
 )
 

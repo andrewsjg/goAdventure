@@ -417,7 +417,7 @@ func (g *Game) DoMove() bool {
 	if g.Newloc != g.Loc && !forced(g.Loc) && !condbit(g.Loc, dungeon.COND_NOARRR) {
 
 		for i := 1; i <= dungeon.NDWARVES; i++ {
-			if (g.Dwarves[i].Oldloc == g.Newloc) && (g.Dwarves[i].Seen != 0) {
+			if (g.Dwarves[i].Oldloc == g.Newloc) && (!g.Dwarves[i].Seen) {
 				g.Newloc = g.Loc
 				g.rspeak(int32(dungeon.DWARF_BLOCK))
 				break
@@ -451,6 +451,12 @@ func (g *Game) DoMove() bool {
 }
 
 // Miscellaneous game functions
+
+// SPEAK functions
+
+func (g *Game) sspeak(msg int, args ...any) {
+	g.speak(dungeon.Arbitrary_Messages[msg], args...)
+}
 
 func (g *Game) rspeak(vocab int32, args ...any) error {
 	msg, err := g.vspeak(dungeon.Arbitrary_Messages[vocab], false, args...)
@@ -838,13 +844,13 @@ func (g *Game) dwarfmove() bool {
 		if !indeep(g.Loc) {
 			id = 0
 		}
-		g.Dwarves[i].Seen = 0
+		g.Dwarves[i].Seen = false
 
-		if (g.Dwarves[i].Seen != 0 && id != 0) || g.Dwarves[i].Loc == g.Loc || g.Dwarves[i].Oldloc == g.Loc {
-			g.Dwarves[i].Seen = 1
+		if (!g.Dwarves[i].Seen && id != 0) || g.Dwarves[i].Loc == g.Loc || g.Dwarves[i].Oldloc == g.Loc {
+			g.Dwarves[i].Seen = true
 		}
 
-		if g.Dwarves[i].Seen == 0 {
+		if g.Dwarves[i].Seen == false {
 			continue
 		}
 
@@ -994,7 +1000,7 @@ func (g *Game) spottedByPirate(dwarfNum int) bool {
 
 			g.Dwarves[PIRATE].Loc = g.Chloc
 			g.Dwarves[PIRATE].Oldloc = g.Chloc
-			g.Dwarves[PIRATE].Seen = 0
+			g.Dwarves[PIRATE].Seen = false
 		} else {
 			if g.Dwarves[PIRATE].Oldloc != g.Dwarves[PIRATE].Loc && pct(20) {
 				g.rspeak(int32(dungeon.PIRATE_RUSTLES))
@@ -1099,26 +1105,6 @@ func (g *Game) drop(object, where int32) {
 		g.Locs[where].Atloc = object
 
 	}
-}
-
-func (g *Game) move(object int32, where int32) {
-	/*  Place any object anywhere by picking it up and dropping it.  May
-	 *  already be toting, in which case the carry is a no-op.  Mustn't
-	 *  pick up objects which are not at any loc, since carry wants to
-	 *  remove objects from game atloc chains. */
-
-	var from int32
-
-	if object > dungeon.NOBJECTS {
-		from = g.Objects[object-dungeon.NOBJECTS].Fixed
-	} else {
-		from = g.Objects[object].Place
-	}
-
-	if from != int32(dungeon.LOC_NOWHERE) && from != CARRIED {
-		g.carry(object, from)
-	}
-	g.drop(object, where)
 }
 
 func (g *Game) PlayerMove(loc int32) {

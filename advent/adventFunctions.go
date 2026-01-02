@@ -3,6 +3,58 @@ package advent
 import "github.com/andrewsjg/goAdventure/dungeon"
 
 // TODO: refactor these perhaps
+
+func (g *Game) move(object int32, where int32) {
+	/*  Place any object anywhere by picking it up and dropping it.  May
+	 *  already be toting, in which case the carry is a no-op.  Mustn't
+	 *  pick up objects which are not at any loc, since carry wants to
+	 *  remove objects from game atloc chains. */
+
+	var from int32
+
+	if object > dungeon.NOBJECTS {
+		from = g.Objects[object-dungeon.NOBJECTS].Fixed
+	} else {
+		from = g.Objects[object].Place
+	}
+
+	if from != int32(dungeon.LOC_NOWHERE) && from != CARRIED {
+		g.carry(object, from)
+	}
+	g.drop(object, where)
+}
+
+func (g *Game) juggle(object int32) {
+	/*  Juggle an object by picking it up and putting it down again, the
+	 * purpose being to get the object to the front of the chain of things
+	 * at its loc. */
+	i := g.Objects[object].Place
+	j := g.Objects[object].Fixed
+
+	g.move(object, i)
+	g.move(object+dungeon.NOBJECTS, j)
+}
+
+func (g *Game) put(object int32, loc int32, prop int32) {
+	/*  put() is the same as move(), except it returns a value used to set
+	 * up the negated game.prop values for the repository objects. */
+	g.move(object, loc)
+	/* (ESR) Read this in combination with the macro defintions in advent.h.
+	 */
+	g.Objects[object].Prop = g.propStashify(prop)
+
+	// TODO: Not sure if we need to bother with this
+	/*
+			#ifdef OBJECT_SET_SEEN
+			OBJECT_SET_SEEN(object);
+		#endif
+	*/
+}
+
+func (g *Game) destroy(object int32) {
+	g.move(object, int32(dungeon.LOC_NOWHERE))
+}
+
 func (g *Game) at(object int32) bool {
 	return g.Objects[object].Place == g.Loc ||
 		g.Objects[object].Fixed == g.Loc
