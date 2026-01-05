@@ -1,6 +1,7 @@
 package advent
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/andrewsjg/goAdventure/dungeon"
@@ -14,12 +15,14 @@ const (
 )
 
 func (g *Game) terminate(mode Termination) {
-	// TODO: Implement this
-
 	points := g.score(mode)
 
-	// TODO: Implement autosave
-	// autosave()
+	// Autosave if enabled
+	if err := g.AutoSave(); err != nil {
+		if g.Settings.EnableDebug {
+			fmt.Printf("DEBUG: Autosave failed: %s\n", err.Error())
+		}
+	}
 
 	if points+int(g.Trnluz)+1 >= mxscr && g.Trnluz != 0 {
 		g.rspeak((int32(dungeon.TOOK_LONG)))

@@ -64,10 +64,22 @@ func NewGame(seed int, restoreFileName string, autoSaveFileName string, logFileN
 
 	if restoreFileName != "" {
 		// Load the game from the restore file
-		err := loadStructFromFile(restoreFileName, &game)
+		err := game.LoadFromFile(restoreFileName)
 
 		if err != nil {
-			fmt.Println("Error loading game:", err)
+			fmt.Fprintf(os.Stderr, "Error loading game: %s\n", err.Error())
+			os.Exit(1)
+		}
+
+		// Mark as not a new game since we restored
+		game.Settings.NewGame = false
+
+		// Show current location after restore
+		game.DescribeLocation()
+		game.ListObjects()
+
+		if debug {
+			fmt.Println("Game restored from:", restoreFileName)
 		}
 
 	} else {
@@ -102,16 +114,16 @@ func NewGame(seed int, restoreFileName string, autoSaveFileName string, logFileN
 		game.Zzword[1] = '\''
 		game.Zzword[5] = '\x00'
 
-		for i := 1; i < dungeon.NDWARVES; i++ {
+		for i := 1; i <= dungeon.NDWARVES; i++ {
 			game.Dwarves[i].Loc = int32(dungeon.DwarfLocs[i-1])
 
 		}
 
-		for i := 1; i < dungeon.NOBJECTS; i++ {
+		for i := 1; i <= dungeon.NOBJECTS; i++ {
 			game.Objects[i].Place = int32(dungeon.LOC_NOWHERE)
 		}
 
-		for i := 1; i < dungeon.NLOCATIONS; i++ {
+		for i := 1; i <= dungeon.NLOCATIONS; i++ {
 			if !(dungeon.Locations[i].Description.Big == "" || dungeon.TKey[i] == 0) {
 				k := dungeon.TKey[i]
 
@@ -137,7 +149,7 @@ func NewGame(seed int, restoreFileName string, autoSaveFileName string, logFileN
 			}
 		}
 
-		for i := 1; i < dungeon.NOBJECTS; i++ {
+		for i := 1; i <= dungeon.NOBJECTS; i++ {
 			k := dungeon.NOBJECTS + 1 - i
 			game.Objects[k].Fixed = int32(dungeon.Objects[k].Fixd)
 			if dungeon.Objects[k].Plac != 0 && dungeon.Objects[k].Fixd <= 0 {
@@ -153,7 +165,7 @@ func NewGame(seed int, restoreFileName string, autoSaveFileName string, logFileN
 		 *  don't rely on the value of uninitialized storage. This is to
 		 *  make translation to future languages easier. */
 
-		for obj := 1; obj < dungeon.NOBJECTS; obj++ {
+		for obj := 1; obj <= dungeon.NOBJECTS; obj++ {
 			if dungeon.Objects[obj].Is_Treasure {
 				game.Tally++
 
@@ -205,6 +217,7 @@ func (g *Game) CheckHints() {
 
 	if dungeon.Conditions[g.Loc] >= g.Conds {
 		for hint := 0; hint < dungeon.NHINTS; hint++ {
+			hint := hint // Capture hint by value for closures
 			{
 				if g.Hints[hint].Used {
 					continue
@@ -328,13 +341,15 @@ func (g *Game) CheckHints() {
 								return fmt.Sprintf("Error: %s", err.Error())
 							}
 
+							game.Hints[hint].Used = false
 							return ""
 						}
 
 						game.speak(dungeon.Hints[hint].Hint)
+						game.Hints[hint].Used = true
 
 						if game.Hints[hint].Used && game.Limit > WARNTIME {
-							game.Limit += int32(WARNTIME * dungeon.Hints[1].Penalty)
+							game.Limit += int32(WARNTIME * dungeon.Hints[hint].Penalty)
 						}
 
 						return dungeon.Hints[hint].Hint
@@ -392,8 +407,6 @@ func (g *Game) DescribeLocation() {
 	if g.Loc == int32(dungeon.LOC_Y2) && !g.Closing {
 		g.rspeak(int32(dungeon.SAYS_PLUGH))
 	}
-
-	g.Output = msg
 }
 
 func (g *Game) DoMove() bool {
@@ -465,13 +478,17 @@ func (g *Game) rspeak(vocab int32, args ...any) error {
 		return err
 	} else {
 
-		g.Output = msg
+		if g.Output != "" {
+			g.Output = g.Output + "\n\n" + msg
+		} else {
+			g.Output = msg
+		}
 
 		return nil
 	}
 }
 
-// Speak a temnporary message
+// Speak a temporary message
 func (g *Game) tspeak(vocab int32, args ...any) error {
 	msg, err := g.vspeak(dungeon.Arbitrary_Messages[vocab], false, args...)
 
@@ -480,7 +497,11 @@ func (g *Game) tspeak(vocab int32, args ...any) error {
 	} else {
 
 		g.OutputType = 1
-		g.Output = msg
+		if g.Output != "" {
+			g.Output = g.Output + "\n\n" + msg
+		} else {
+			g.Output = msg
+		}
 
 		return nil
 	}
@@ -495,7 +516,11 @@ func (g *Game) speak(msg string, args ...any) error {
 
 	} else {
 
-		g.Output = msg
+		if g.Output != "" {
+			g.Output = g.Output + "\n\n" + msg
+		} else {
+			g.Output = msg
+		}
 		return nil
 	}
 }
@@ -539,8 +564,10 @@ func (g *Game) vspeak(msg string, blank bool, args ...any) (string, error) {
 		return "", nil
 	}
 
+	// If blank is true, we'll prepend a newline to the output
+	prefix := ""
 	if blank {
-		return fmt.Sprintf("\n"), nil
+		prefix = "\n"
 	}
 
 	pluralise := false
@@ -548,7 +575,7 @@ func (g *Game) vspeak(msg string, blank bool, args ...any) (string, error) {
 	renderedString := msg
 
 	// If location is outside. Render the string with "ground" instead of "floor"
-	if strings.Contains("floor", renderedString) && !inside(g.Loc) {
+	if strings.Contains(renderedString, "floor") && !inside(g.Loc) {
 		renderedString = strings.Replace(renderedString, "floor", "ground", -1)
 	}
 
@@ -624,7 +651,7 @@ func (g *Game) vspeak(msg string, blank bool, args ...any) (string, error) {
 	}
 	// g.Output = renderedString
 
-	return renderedString, nil
+	return prefix + renderedString, nil
 }
 
 /*
@@ -1042,7 +1069,7 @@ func (g *Game) carry(object, where int32) {
 	 * object>NOBJECTS (moving "fixed" second loc), don't change game.place
 	 * or game.holdng. */
 
-	if object > dungeon.NOBJECTS {
+	if object <= dungeon.NOBJECTS {
 		if g.Objects[object].Place == CARRIED {
 			return
 		}
@@ -1094,21 +1121,273 @@ func (g *Game) drop(object, where int32) {
 				 */
 				g.Holdng--
 			}
-			g.Objects[object].Place = where
 		}
+		g.Objects[object].Place = where
+	}
 
-		if where == int32(dungeon.LOC_NOWHERE) || where == CARRIED {
+	if where == int32(dungeon.LOC_NOWHERE) || where == CARRIED {
+		return
+	}
+
+	g.Link[object] = g.Locs[where].Atloc
+	g.Locs[where].Atloc = object
+}
+
+func traveleq(a int, b int) bool {
+	/* Are two travel entries equal for purposes of skip after failed condition? */
+	return dungeon.Travel[a].CondType == dungeon.Travel[b].CondType &&
+		dungeon.Travel[a].CondArg1 == dungeon.Travel[b].CondArg1 &&
+		dungeon.Travel[a].CondArg2 == dungeon.Travel[b].CondArg2 &&
+		dungeon.Travel[a].DestType == dungeon.Travel[b].DestType &&
+		dungeon.Travel[a].DestVal == dungeon.Travel[b].DestVal
+}
+
+func (g *Game) PlayerMove(motion int32) {
+	/* Begin at travel_entry, where the travel table entry for motion is stored.
+	 * Save initial location location (game.loc) in "game.oldloc" in case the player
+	 * wants to retreat.  The current game.oldloc is saved in game.oldlc2, in
+	 * case the player dies.  (if they do, game.newloc will be limbo, and
+	 * game.oldloc will be what killed them, so we need game.oldlc2, which
+	 * is the last place they were safe.) */
+
+	var scratchloc int32
+	travelEntry := int(dungeon.TKey[g.Loc])
+	g.Newloc = g.Loc
+
+	if travelEntry == 0 {
+		// BUG: Location has no travel entries
+		return
+	}
+
+	if motion == int32(dungeon.NUL) {
+		return
+	} else if motion == int32(dungeon.BACK) {
+		/* Handle "go back".  Look for verb which goes from game.loc to
+		 * game.oldloc, or to game.oldlc2 if game.oldloc has forced-motion.
+		 * te_tmp saves entry -> forced loc -> previous loc. */
+		motion = g.Oldloc
+		if forced(motion) {
+			motion = g.Oldlc2
+		}
+		g.Oldlc2 = g.Oldloc
+		g.Oldloc = g.Loc
+		if condbit(g.Loc, dungeon.COND_NOBACK) {
+			g.rspeak(int32(dungeon.TWIST_TURN))
+			return
+		}
+		if motion == g.Loc {
+			g.rspeak(int32(dungeon.FORGOT_PATH))
 			return
 		}
 
-		g.Link[object] = g.Locs[where].Atloc
-		g.Locs[where].Atloc = object
+		teTmp := 0
+		for {
+			desttype := dungeon.Travel[travelEntry].DestType
+			scratchloc = int32(dungeon.Travel[travelEntry].DestVal)
+			if desttype != dungeon.DestGoto || scratchloc != motion {
+				if desttype == dungeon.DestGoto {
+					if forced(scratchloc) && int32(dungeon.Travel[int(dungeon.TKey[scratchloc])].DestVal) == motion {
+						teTmp = travelEntry
+					}
+				}
+				if !dungeon.Travel[travelEntry].Stop {
+					travelEntry++ // go to next travel entry for this location
+					continue
+				}
+				// we've reached the end of travel entries for game.loc
+				travelEntry = teTmp
+				if travelEntry == 0 {
+					g.rspeak(int32(dungeon.NOT_CONNECTED))
+					return
+				}
+			}
 
+			motion = int32(dungeon.Travel[travelEntry].Motion)
+			travelEntry = int(dungeon.TKey[g.Loc])
+			break // fall through to ordinary travel
+		}
+	} else if motion == int32(dungeon.LOOK) {
+		/* Look.  Can't give more detail.  Pretend it wasn't dark
+		 * (though it may now be dark) so player won't fall into a
+		 * pit while staring into the gloom. */
+		if g.Detail < 3 {
+			g.rspeak(int32(dungeon.NO_MORE_DETAIL))
+		}
+		g.Detail++
+		g.Wzdark = false
+		g.Locs[g.Loc].Abbrev = 0
+		return
+	} else if motion == int32(dungeon.CAVE) {
+		/* Cave.  Different messages depending on whether above ground. */
+		if outside(g.Loc) && g.Loc != int32(dungeon.LOC_GRATE) {
+			g.rspeak(int32(dungeon.FOLLOW_STREAM))
+		} else {
+			g.rspeak(int32(dungeon.NEED_DETAIL))
+		}
+		return
+	} else {
+		/* none of the specials */
+		g.Oldlc2 = g.Oldloc
+		g.Oldloc = g.Loc
 	}
-}
 
-func (g *Game) PlayerMove(loc int32) {
-	//TODO: Implement PlayerMove. Does this need to be exported?
+	/* Look for a way to fulfil the motion verb passed in - travel_entry
+	 * indexes the beginning of the motion entries for here (game.loc). */
+	for {
+		if dungeon.Travel[travelEntry].Motion == dungeon.HERE || dungeon.Travel[travelEntry].Motion == int(motion) {
+			break
+		}
+		if dungeon.Travel[travelEntry].Stop {
+			/* Couldn't find an entry matching the motion word passed in.
+			 * Various messages depending on word given. */
+			switch motion {
+			case int32(dungeon.EAST), int32(dungeon.WEST), int32(dungeon.SOUTH), int32(dungeon.NORTH),
+				int32(dungeon.NE), int32(dungeon.NW), int32(dungeon.SW), int32(dungeon.SE),
+				int32(dungeon.UP), int32(dungeon.DOWN):
+				g.rspeak(int32(dungeon.BAD_DIRECTION))
+			case int32(dungeon.FORWARD), int32(dungeon.LEFT), int32(dungeon.RIGHT):
+				g.rspeak(int32(dungeon.UNSURE_FACING))
+			case int32(dungeon.OUTSIDE), int32(dungeon.INSIDE):
+				g.rspeak(int32(dungeon.NO_INOUT_HERE))
+			case int32(dungeon.XYZZY), int32(dungeon.PLUGH):
+				g.rspeak(int32(dungeon.NOTHING_HAPPENS))
+			case int32(dungeon.CRAWL):
+				g.rspeak(int32(dungeon.WHICH_WAY))
+			default:
+				g.rspeak(int32(dungeon.CANT_APPLY))
+			}
+			return
+		}
+		travelEntry++
+	}
+
+	/* We've found a destination that goes with the motion verb.
+	 * Next we need to check any conditional(s) on this destination, and
+	 * possibly on following entries. */
+	for {
+		for {
+			for {
+				condtype := dungeon.Travel[travelEntry].CondType
+				condarg1 := dungeon.Travel[travelEntry].CondArg1
+				condarg2 := dungeon.Travel[travelEntry].CondArg2
+
+				if condtype < dungeon.CondNot {
+					/* YAML N and [pct N] conditionals */
+					if condtype == dungeon.CondGoto || condtype == dungeon.CondPct {
+						if condarg1 == 0 || pct(int32(condarg1)) {
+							break
+						}
+						/* else fall through */
+					} else if g.toting(condarg1) || (condtype == dungeon.CondWith && g.at(int32(condarg1))) {
+						/* YAML [with OBJ] clause */
+						break
+					}
+					/* else fall through to check [not OBJ STATE] */
+				} else if g.Objects[condarg1].Prop != int32(condarg2) {
+					break
+				}
+
+				/* We arrive here on conditional failure.
+				 * Skip to next non-matching destination */
+				teTmp := travelEntry
+				for {
+					if dungeon.Travel[teTmp].Stop {
+						// BUG: Conditional travel entry with no alteration
+						return
+					}
+					teTmp++
+					if !traveleq(travelEntry, teTmp) {
+						break
+					}
+				}
+				travelEntry = teTmp
+			}
+
+			/* Found an eligible rule, now execute it */
+			desttype := dungeon.Travel[travelEntry].DestType
+			g.Newloc = int32(dungeon.Travel[travelEntry].DestVal)
+
+			if desttype == dungeon.DestGoto {
+				return
+			}
+
+			if desttype == dungeon.DestSpeak {
+				/* Execute a speak rule */
+				g.rspeak(g.Newloc)
+				g.Newloc = g.Loc
+				return
+			} else {
+				/* Handle special travel cases */
+				switch g.Newloc {
+				case 1:
+					/* Special travel 1.  Plover-alcove passage.
+					 * Can carry only emerald. */
+					if g.Loc == int32(dungeon.LOC_PLOVER) {
+						g.Newloc = int32(dungeon.LOC_ALCOVE)
+					} else {
+						g.Newloc = int32(dungeon.LOC_PLOVER)
+					}
+					if g.Holdng > 1 || (g.Holdng == 1 && !g.toting(int(dungeon.EMERALD))) {
+						g.Newloc = g.Loc
+						g.rspeak(int32(dungeon.MUST_DROP))
+					}
+					return
+				case 2:
+					/* Special travel 2.  Plover transport.
+					 * Drop the emerald (only use special travel if toting it),
+					 * so player is forced to use the plover-passage to get it out. */
+					g.drop(int32(dungeon.EMERALD), g.Loc)
+					teTmp := travelEntry
+					for {
+						if dungeon.Travel[teTmp].Stop {
+							// BUG: Conditional travel entry with no alteration
+							return
+						}
+						teTmp++
+						if !traveleq(travelEntry, teTmp) {
+							break
+						}
+					}
+					travelEntry = teTmp
+					continue
+				case 3:
+					/* Special travel 3.  Troll bridge. */
+					if g.Objects[dungeon.TROLL].Prop == dungeon.TROLL_PAIDONCE {
+						g.pSpeak(int32(dungeon.TROLL), Look, true, dungeon.TROLL_PAIDONCE)
+						g.Objects[dungeon.TROLL].Prop = dungeon.TROLL_UNPAID
+						g.destroy(int32(dungeon.TROLL2))
+						g.move(int32(dungeon.TROLL2+dungeon.NOBJECTS), IS_FREE)
+						g.move(int32(dungeon.TROLL), int32(dungeon.Objects[dungeon.TROLL].Plac))
+						g.move(int32(dungeon.TROLL+dungeon.NOBJECTS), int32(dungeon.Objects[dungeon.TROLL].Fixd))
+						g.juggle(int32(dungeon.CHASM))
+						g.Newloc = g.Loc
+						return
+					} else {
+						g.Newloc = int32(dungeon.Objects[dungeon.TROLL].Plac) + int32(dungeon.Objects[dungeon.TROLL].Fixd) - g.Loc
+						if g.Objects[dungeon.TROLL].Prop == dungeon.TROLL_UNPAID {
+							g.Objects[dungeon.TROLL].Prop = dungeon.TROLL_PAIDONCE
+						}
+						if !g.toting(int(dungeon.BEAR)) {
+							return
+						}
+						g.stateChange(int(dungeon.CHASM), dungeon.BRIDGE_WRECKED)
+						g.Objects[dungeon.TROLL].Prop = dungeon.TROLL_GONE
+						g.drop(int32(dungeon.BEAR), g.Newloc)
+						g.Objects[dungeon.BEAR].Fixed = IS_FIXED
+						g.Objects[dungeon.BEAR].Prop = dungeon.BEAR_DEAD
+						g.Oldlc2 = g.Newloc
+						g.croak()
+						return
+					}
+				default:
+					// BUG: Special travel >300 exceeds goto list
+					return
+				}
+			}
+			break
+		}
+		break
+	}
 }
 
 func (g *Game) ListObjects() {
@@ -1117,11 +1396,19 @@ func (g *Game) ListObjects() {
 		// TODO: Figure out how to handle this better
 		//g.Locs[g.Loc].Abbrev++
 
+		if g.Settings.EnableDebug {
+			fmt.Printf("DEBUG ListObjects: Loc=%d, Atloc=%d\n", g.Loc, g.Locs[g.Loc].Atloc)
+		}
+
 		for i := g.Locs[g.Loc].Atloc; i != 0; i = g.Link[i] {
 			obj := i
 
 			if obj > dungeon.NOBJECTS {
 				obj -= dungeon.NOBJECTS
+			}
+
+			if g.Settings.EnableDebug {
+				fmt.Printf("DEBUG ListObjects: Found object i=%d, obj=%d\n", i, obj)
 			}
 
 			if obj == int32(dungeon.STEPS) && g.toting(int(dungeon.NUGGET)) {
@@ -1185,7 +1472,16 @@ func (g *Game) ListObjects() {
 				}
 			}
 
+			if g.Settings.EnableDebug {
+				fmt.Printf("DEBUG ListObjects: About to pSpeak obj=%d, kk=%d\n", obj, kk)
+				fmt.Printf("DEBUG ListObjects: Output before pSpeak: %q\n", g.Output)
+			}
+
 			g.pSpeak(obj, Look, true, kk)
+
+			if g.Settings.EnableDebug {
+				fmt.Printf("DEBUG ListObjects: Output after pSpeak: %q\n", g.Output)
+			}
 
 		}
 	}

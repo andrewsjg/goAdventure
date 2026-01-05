@@ -208,3 +208,21 @@ const (
 	Study
 	Change
 )
+
+type PhaseCode int
+
+const (
+	GO_TERMINATE PhaseCode = iota
+	GO_MOVE
+	GO_TOP
+	GO_CLEAROBJ
+	GO_CHECKHINT
+	GO_WORD2
+	GO_UNKNOWN
+	GO_DWARFWAKE
+)
+
+const (
+	INTRANSITIVE = -1
+	NO_OBJECT    = 0
+)

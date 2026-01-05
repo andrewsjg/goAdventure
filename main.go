@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/andrewsjg/goAdventure/advent"
 	"github.com/andrewsjg/goAdventure/tui"
@@ -15,15 +18,17 @@ func main() {
 	logFileName := ""
 	autoSaveFileName := ""
 	restoreFileName := ""
-	debug := true
+	debug := false
 	oldStyle := false
 	autoSave := true
+	noTUI := false
 
 	flag.StringVar(&logFileName, "l", "", "Create a log file of your game named as specified")
 	flag.BoolVar(&oldStyle, "o", false, "'Oldstyle' mode (no prompt, no command editing, displays 'Initialising...')")
 	flag.StringVar(&autoSaveFileName, "a", "", "Automatic save/restore from specified saved game file")
 	flag.StringVar(&restoreFileName, "r", "", "Restore from specified saved game file")
 	flag.BoolVar(&debug, "d", false, "Enable debug mode")
+	flag.BoolVar(&noTUI, "notui", false, "Run without TUI (classic terminal mode)")
 
 	// Parse the command-line flags
 	flag.Parse()
@@ -44,12 +49,90 @@ func main() {
 		fmt.Printf("Seedval: %d\n", game.Seedval)
 	}
 
-	// Create a new game
-	adventure := tui.NewAdventure(game)
+	if noTUI {
+		// Run in classic terminal mode
+		runClassicMode(&game)
+	} else {
+		// Create a new game with TUI
+		adventure := tui.NewAdventure(game)
 
-	// Start the game
-	if _, err := adventure.Run(); err != nil {
-		fmt.Println("Error running the adventure:", err)
-		return
+		// Start the game
+		if _, err := adventure.Run(); err != nil {
+			fmt.Println("Error running the adventure:", err)
+			return
+		}
+	}
+}
+
+func runClassicMode(game *advent.Game) {
+	reader := bufio.NewReader(os.Stdin)
+
+	// Print initial welcome message
+	fmt.Println(game.Output)
+
+	// Main game loop
+	for {
+		// Check for queries
+		if game.QueryFlag {
+			fmt.Print(game.Output)
+			fmt.Print("\n> ")
+			response, err := reader.ReadString('\n')
+			if err != nil {
+				fmt.Println("Error reading input:", err)
+				return
+			}
+			response = strings.TrimSpace(response)
+
+			game.QueryResponse = response
+			game.QueryFlag = false
+
+			if game.OnQueryResponse != nil {
+				game.OnQueryResponse(game.QueryResponse, game)
+				fmt.Println(game.Output)
+			}
+			continue
+		}
+
+		// Do movement if needed
+		if game.Newloc != game.Loc {
+			game.DoMove()
+			game.DescribeLocation()
+			game.ListObjects()
+			fmt.Println(game.Output)
+		}
+
+		// Check for forced moves
+		if game.LocForced() {
+			game.MoveHere()
+			continue
+		}
+
+		// Get command from user
+		fmt.Print("> ")
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println("Error reading input:", err)
+			return
+		}
+
+		input = strings.TrimSpace(input)
+
+		// Handle exit
+		if strings.ToLower(input) == "quit" || strings.ToLower(input) == "exit" {
+			// Autosave if enabled
+			if err := game.AutoSave(); err != nil && game.Settings.EnableDebug {
+				fmt.Printf("DEBUG: Autosave failed: %s\n", err.Error())
+			}
+			fmt.Println("Thanks for playing!")
+			return
+		}
+
+		// Process command
+		err = game.ProcessCommand(input)
+		if err != nil {
+			fmt.Println("Error:", err)
+		} else {
+			fmt.Println(game.Output)
+		}
 	}
 }

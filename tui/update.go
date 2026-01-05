@@ -10,8 +10,13 @@ import (
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
-	m.game.DoMove()
-
+	// Perform the move if newloc has been set (but not if waiting for query response)
+	if m.game.Newloc != m.game.Loc && !m.game.QueryFlag {
+		m.game.DoMove()
+		m.game.DescribeLocation()
+		m.game.ListObjects()
+	}
+	m.game.ListObjects()
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 
@@ -46,6 +51,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					m.output = m.game.Output
 
+					// Ensure no movement happens on next frame to preserve query response output
+					m.game.Newloc = m.game.Loc
+
 				} else {
 					m.debug = "No OnQueryResponse function set\n"
 				}
@@ -58,7 +66,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.output = m.game.Output
 
-					m.debug = fmt.Sprintf("CMD: %s LOC: %d\n", m.input.Value(), m.game.Loc)
+					m.debug = fmt.Sprintf("CMD: %s LOC: %d\nOutput: %s\n", m.input.Value(), m.game.Loc, m.output)
 					m.input.SetValue("") // Clear the input field
 				}
 			}
@@ -88,12 +96,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	default:
 		// No command to process yet
-
-		if m.game.LocForced() {
+		// Check for forced moves (but not during a query)
+		if m.game.LocForced() && !m.game.QueryFlag {
 			m.game.MoveHere()
 		}
-
-		m.game.ListObjects()
 
 	case tea.WindowSizeMsg: // Handle window resize
 		m.input.Width = msg.Width // Adjust input width

@@ -122,6 +122,15 @@ func (g *Game) LiqLoc() int32 {
 	return int32(dungeon.NO_OBJECT)
 }
 
+func (g *Game) liquid() int32 {
+	if g.Objects[dungeon.BOTTLE].Prop == dungeon.WATER_BOTTLE {
+		return int32(dungeon.WATER)
+	} else if g.Objects[dungeon.BOTTLE].Prop == dungeon.OIL_BOTTLE {
+		return int32(dungeon.OIL)
+	}
+	return int32(dungeon.NO_OBJECT)
+}
+
 /*
  *  DESTROY(N)  = Get rid of an item by putting it in LOC_NOWHERE
  *  MOD(N,M)    = Arithmetic modulus
@@ -171,3 +180,15 @@ func forced(location int32) bool {
 func indeep(location int32) bool {
 	return condbit(location, dungeon.COND_DEEP)
 }
+
+func gstone(obj int) bool {
+	return obj == dungeon.EMERALD || obj == dungeon.RUBY || obj == dungeon.AMBER || obj == dungeon.SAPPH
+}
+
+func (g *Game) stateChange(obj int, state int32) {
+	// Object must have a change-message list for this to be useful
+	g.Objects[obj].Prop = state
+	g.pSpeak(int32(obj), Change, true, state)
+}
+
+const INVLIMIT = 7

@@ -14,8 +14,6 @@
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
-# Aider
-.aider.*
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
@@ -30,4 +28,6 @@ go.work.sum
 dungeon/dungeon.go
 dungeon/dungeonTypes.go
 *.save
-.aider*
+
+#Binary
+goAdventure
