@@ -694,13 +694,9 @@ func (g *Game) action(command *Command) PhaseCode {
 	// word unless verb is "say", which snarfs arbitrary second word.
 
 	// Check if this is a no-action verb (just displays a message)
-	if command.Verb < dungeon.NACTIONS && dungeon.Actions[command.Verb].Message != "" {
-		// Check if this action requires no further processing
-		noAction := dungeon.Actions[command.Verb].Words.N == 0
-		if noAction {
-			g.speak(dungeon.Actions[command.Verb].Message)
-			return GO_CLEAROBJ
-		}
+	if command.Verb < dungeon.NACTIONS && dungeon.Actions[command.Verb].NoAction {
+		g.speak(dungeon.Actions[command.Verb].Message)
+		return GO_CLEAROBJ
 	}
 
 	if command.Part == Unknown {

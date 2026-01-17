@@ -47,7 +47,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				if m.game.OnQueryResponse != nil {
 					m.debug = fmt.Sprintf("Query Response: %s Calling OnQueryResponse \n", m.game.QueryResponse)
-					m.game.OnQueryResponse(m.game.QueryResponse, &m.game)
+					m.game.OnQueryResponse(m.game.QueryResponse, m.game)
 
 					m.output = m.game.Output
 

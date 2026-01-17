@@ -14,7 +14,7 @@ type model struct {
 	output         string
 	debug          string
 	previousOutput string
-	game           advent.Game
+	game           *advent.Game
 }
 
 func (m model) Init() tea.Cmd {
@@ -22,7 +22,7 @@ func (m model) Init() tea.Cmd {
 	return textinput.Blink
 }
 
-func initialModel(game advent.Game) model {
+func initialModel(game *advent.Game) model {
 	ti := textinput.New()
 	ti.Placeholder = "Type something..."
 	ti.Focus()
@@ -36,7 +36,7 @@ func initialModel(game advent.Game) model {
 	}
 }
 
-func NewAdventure(game advent.Game) *tea.Program {
+func NewAdventure(game *advent.Game) *tea.Program {
 	m := initialModel(game)
 
 	p := tea.NewProgram(m, tea.WithAltScreen())

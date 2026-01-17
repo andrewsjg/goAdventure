@@ -54,7 +54,7 @@ func main() {
 		runClassicMode(&game)
 	} else {
 		// Create a new game with TUI
-		adventure := tui.NewAdventure(game)
+		adventure := tui.NewAdventure(&game)
 
 		// Start the game
 		if _, err := adventure.Run(); err != nil {
