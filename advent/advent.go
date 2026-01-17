@@ -192,13 +192,17 @@ func NewGame(seed int, restoreFileName string, autoSaveFileName string, logFileN
 				}
 
 				if !game.Settings.EnableDebug {
-					// For now just move the the existing save file to a new file with a random string appended
-					newAutoSaveFileName := "advent_" + generateRandomString(5) + ".save"
-					err := os.Rename(game.Settings.AutoSaveFileName, newAutoSaveFileName)
 
-					if err != nil {
-						fmt.Println("Error renaming autosave file:", err)
-					}
+					// TODO: Fix autosave
+					/*
+						// For now just move the the existing save file to a new file with a random string appended
+						newAutoSaveFileName := "advent_" + generateRandomString(5) + ".save"
+						err := os.Rename(game.Settings.AutoSaveFileName, newAutoSaveFileName)
+
+						if err != nil {
+							fmt.Println("Error renaming autosave file:", err)
+						}
+					*/
 				}
 
 			}

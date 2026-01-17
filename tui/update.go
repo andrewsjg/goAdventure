@@ -16,8 +16,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.game.DescribeLocation()
 		m.game.ListObjects()
 	}
-	m.game.ListObjects()
+
 	var cmd tea.Cmd
+	var vpCmd tea.Cmd
+
 	switch msg := msg.(type) {
 
 	case tea.KeyMsg: // Handle keyboard input
@@ -51,6 +53,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					m.output = m.game.Output
 
+					m.content += m.game.Output + "\n"
+					m.gameOutput.SetContent(m.content)
+					m.gameOutput.GotoBottom() // auto-scroll to show latest
+
 					// Ensure no movement happens on next frame to preserve query response output
 					m.game.Newloc = m.game.Loc
 
@@ -68,6 +74,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					m.debug = fmt.Sprintf("CMD: %s LOC: %d\nOutput: %s\n", m.input.Value(), m.game.Loc, m.output)
 					m.input.SetValue("") // Clear the input field
+
 				}
 			}
 
@@ -104,11 +111,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg: // Handle window resize
 		m.input.Width = msg.Width // Adjust input width
 
+		m.gameOutput.Width = msg.Width
+		m.gameOutput.Height = msg.Height - 3 // leave room for input + prompt
+		m.gameOutput.SetContent(m.content)   // Re-apply content after resize
+
+	}
+
+	if m.game.Output != "" {
+		m.content += "\n" + m.game.Output + "\n"
+		m.gameOutput.SetContent(m.content)
+		m.gameOutput.GotoBottom()
+		m.game.Output = "" // clear it so we don't re-add
 	}
 
 	m.input, cmd = m.input.Update(msg)
+	m.gameOutput, vpCmd = m.gameOutput.Update(msg)
 
-	return m, cmd
+	return m, tea.Batch(cmd, vpCmd)
 }
 
 func temporaryMessageTimer(duration time.Duration) tea.Cmd {
