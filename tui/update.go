@@ -112,8 +112,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.input.Width = msg.Width // Adjust input width
 
 		m.gameOutput.Width = msg.Width
-		m.gameOutput.Height = msg.Height - 3 // leave room for input + prompt
-		m.gameOutput.SetContent(m.content)   // Re-apply content after resize
+		m.gameOutput.Height = 40           //msg.Height - 3 // leave room for input + prompt
+		m.gameOutput.SetContent(m.content) // Re-apply content after resize
 
 	}
 

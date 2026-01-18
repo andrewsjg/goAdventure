@@ -1094,14 +1094,19 @@ func (g *Game) carry(object, where int32) {
 
 	if g.Locs[where].Atloc == object {
 		g.Locs[where].Atloc = g.Link[object]
+		g.Link[object] = 0
 		return
 	}
-	temp := g.Locs[where].Atloc
-	for temp != object {
-		temp = g.Link[temp]
+	prev := g.Locs[where].Atloc
+	for prev != 0 && g.Link[prev] != object {
+		prev = g.Link[prev]
 	}
 
-	g.Link[temp] = g.Link[object]
+	if prev != 0 && g.Link[prev] == object {
+		g.Link[prev] = g.Link[object]
+	}
+
+	g.Link[object] = 0
 
 }
 
