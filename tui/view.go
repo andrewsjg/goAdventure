@@ -97,11 +97,41 @@ func (m model) View() string {
 		Width(inventoryWidth)
 
 	inventoryBox := inventoryStyle.Render(inventoryContent)
+
+	// Movement history pane
+	historyTitleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("186"))
+	historyBody := "No moves yet."
+	if len(m.moveHistory) > 0 {
+		historyLines := make([]string, 0, len(m.moveHistory))
+		for i := len(m.moveHistory) - 1; i >= 0; i-- {
+			historyLines = append(historyLines, "→ "+m.moveHistory[i])
+		}
+		historyBody = strings.Join(historyLines, "\n")
+	}
+
+	historyContent := lipgloss.JoinVertical(lipgloss.Left,
+		historyTitleStyle.Render("Recent Moves\n"),
+		historyBody,
+	)
+
+	historyStyle := boxStyle.
+		AlignHorizontal(lipgloss.Left).
+		AlignVertical(lipgloss.Top).
+		Width(inventoryWidth)
+
+	historyBox := historyStyle.Render(historyContent)
+
+	// Combine inventory and history into right column
+	rightColumn := lipgloss.JoinVertical(lipgloss.Top, inventoryBox, historyBox)
+
 	gap := lipgloss.NewStyle().Width(gapWidth).Render("")
 
 	// Make the header and footer
+	footerStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("240")).
+		PaddingLeft(1)
 
-	footerText := fmt.Sprintf("")
+	footerText := footerStyle.Render(fmt.Sprintf("Score: %d  |  Turns: %d", m.game.GetScore(), m.game.Turns))
 
 	titleString := strings.Join([]string{
 		"█▀█ █▀▄ █ █ █▀▀ █▄ █ ▀█▀ █ █ █▀█ █▀▀                  ▀█   █▀",
@@ -116,7 +146,7 @@ func (m model) View() string {
 
 	header := fmt.Sprintf("%s", headerText)
 
-	mainScreen := lipgloss.JoinHorizontal(lipgloss.Top, mainColumn, gap, inventoryBox)
+	mainScreen := lipgloss.JoinHorizontal(lipgloss.Top, mainColumn, gap, rightColumn)
 
 	return lipgloss.JoinVertical(lipgloss.Top, header, mainScreen, footerText)
 

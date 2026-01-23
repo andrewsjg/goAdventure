@@ -53,7 +53,23 @@ func (g *Game) terminate(mode Termination) {
 	os.Exit(EXIT_SUCCESS)
 }
 
+// GetScore returns the current score without side effects (for UI display)
+func (g *Game) GetScore() int {
+	return g.calculateScore(false)
+}
+
 func (g *Game) score(mode Termination) int {
+	score := g.calculateScore(mode == EndGame)
+
+	/* Return to score command if that's where we came from. */
+	if mode == ScoreGame {
+		g.rspeak(int32(dungeon.GARNERED_POINTS), score, mxscr, g.Turns, g.Turns)
+	}
+
+	return score
+}
+
+func (g *Game) calculateScore(endGame bool) int {
 
 	score := 0
 
@@ -118,7 +134,7 @@ func (g *Game) score(mode Termination) int {
 	score += (dungeon.NDEATHS - int(g.Numdie)) * 10
 	mxscr += dungeon.NDEATHS * 10
 
-	if mode == EndGame {
+	if endGame {
 		score += 4
 	}
 	mxscr += 4
@@ -181,11 +197,6 @@ func (g *Game) score(mode Termination) int {
 	}
 
 	score = score - int(g.Trnluz) - int(g.Saved)
-
-	/* Return to score command if that's where we came from. */
-	if mode == ScoreGame {
-		g.rspeak(int32(dungeon.GARNERED_POINTS), score, mxscr, g.Turns, g.Turns)
-	}
 
 	return score
 }

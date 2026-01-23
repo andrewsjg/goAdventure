@@ -65,14 +65,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			} else {
-				err := m.game.ProcessCommand(m.input.Value())
+				// Track location before command to detect movement
+				locBefore := m.game.Loc
+				userCmd := m.input.Value()
+
+				err := m.game.ProcessCommand(userCmd)
 
 				if err != nil {
 					m.output = fmt.Sprintf("Error: %s", err.Error())
 				} else {
 					m.output = m.game.Output
 
-					m.debug = fmt.Sprintf("CMD: %s LOC: %d\nOutput: %s\n", m.input.Value(), m.game.Loc, m.output)
+					// If location changed or newloc is set, record the direction
+					if m.game.Newloc != locBefore || m.game.Loc != locBefore {
+						m.moveHistory = append(m.moveHistory, userCmd)
+						if len(m.moveHistory) > maxMoveHistory {
+							m.moveHistory = m.moveHistory[1:]
+						}
+					}
+
+					m.debug = fmt.Sprintf("CMD: %s LOC: %d\nOutput: %s\n", userCmd, m.game.Loc, m.output)
 					m.input.SetValue("") // Clear the input field
 
 				}
@@ -125,7 +137,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	m.input, cmd = m.input.Update(msg)
-	m.gameOutput, vpCmd = m.gameOutput.Update(msg)
+
+	// Only pass non-key messages to viewport (prevents typing from scrolling)
+	switch msg.(type) {
+	case tea.KeyMsg:
+		// Don't pass key events to viewport
+	default:
+		m.gameOutput, vpCmd = m.gameOutput.Update(msg)
+	}
 
 	return m, tea.Batch(cmd, vpCmd)
 }

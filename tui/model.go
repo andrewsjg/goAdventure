@@ -18,7 +18,10 @@ type model struct {
 	debug          string
 	previousOutput string
 	game           *advent.Game
+	moveHistory    []string // Last N directions moved
 }
+
+const maxMoveHistory = 4
 
 func (m model) Init() tea.Cmd {
 
@@ -42,11 +45,12 @@ func initialModel(game *advent.Game) model {
 	vp.SetContent(content)
 
 	return model{
-		input:      ti,
-		gameOutput: vp,
-		content:    content,
-		debug:      fmt.Sprintf("ZZWORD: %s\nSeedval: %d\nOutput:%s", string(game.Zzword[:]), game.Seedval, game.Output),
-		game:       game,
+		input:       ti,
+		gameOutput:  vp,
+		content:     content,
+		debug:       fmt.Sprintf("ZZWORD: %s\nSeedval: %d\nOutput:%s", string(game.Zzword[:]), game.Seedval, game.Output),
+		game:        game,
+		moveHistory: make([]string, 0, maxMoveHistory),
 	}
 }
 
