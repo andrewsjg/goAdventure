@@ -63,15 +63,27 @@ func (m model) View() string {
 		AlignHorizontal(lipgloss.Left).
 		Width(mainWidth)
 
+	// Pinned location description at top
+	locationDesc := m.game.GetLocationDescription()
+	visibleObjs := m.game.GetVisibleObjects()
+
+	locationStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("10")).
+		Padding(0, 1).
+		Width(mainWidth).
+		Foreground(lipgloss.Color("229"))
+
+	locationContent := locationDesc
+	if len(visibleObjs) > 0 {
+		locationContent += "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(strings.Join(visibleObjs, "\n"))
+	}
+	locationBox := locationStyle.Render(locationContent)
+
 	inputBox := inputStyle.Render(inputViewport.View())
 	outputBox := outputStyle.Render(outputViewport.View())
 
-	mainColumn := fmt.Sprintf("%s\n%s", outputBox, inputBox)
-
-	/*
-		if inventoryWidth <= 0 || m.game == nil {
-			return mainColumn
-		} */
+	mainColumn := fmt.Sprintf("%s\n%s\n%s", locationBox, outputBox, inputBox)
 
 	inventoryItems := m.game.InventoryDescriptions()
 
@@ -133,13 +145,17 @@ func (m model) View() string {
 
 	footerText := footerStyle.Render(fmt.Sprintf("Score: %d  |  Turns: %d", m.game.GetScore(), m.game.Turns))
 
+	// Title banner
 	titleString := strings.Join([]string{
 		"█▀█ █▀▄ █ █ █▀▀ █▄ █ ▀█▀ █ █ █▀█ █▀▀                  ▀█   █▀",
 		"█▀█ █▄▀ ▀▄▀ ██▄ █ ▀█  █  █▄█ █▀▄ ██▄              ▀▄▀ █▄ ▄ ▄█ ",
 	}, "\n")
 
+	// Colors Reference:
 	// 105 = purple
 	// 184 = light yellow
+	// 10 = green
+
 	titleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("186"))
 	title := titleStyle.Render(titleString)
 	headerText := fmt.Sprintf(title)

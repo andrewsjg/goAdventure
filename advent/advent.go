@@ -245,7 +245,7 @@ func NewGame(seed int, restoreFileName string, autoSaveFileName string, logFileN
 
 			}
 
-			err := saveStructToFile(game.Settings.AutoSaveFileName, game)
+			err := game.SaveToFile(game.Settings.AutoSaveFileName)
 			if err != nil {
 				fmt.Println("Error saving game:", err)
 			}
@@ -577,20 +577,37 @@ func (g *Game) pSpeak(msg int32, mode SpeakType, blank bool, skip int32, args ..
 	var err error
 	var output string
 
+	// Bounds check for object index
+	if msg < 0 || int(msg) >= len(dungeon.Objects) {
+		return
+	}
+
 	switch mode {
 	case Touch:
 		output, err = g.vspeak(dungeon.Objects[msg].Inventory, blank, args...)
 
 	case Look:
+		if int(skip) >= len(dungeon.Objects[msg].Descriptions) || skip < 0 {
+			return
+		}
 		output, err = g.vspeak(dungeon.Objects[msg].Descriptions[skip], blank, args...)
 
 	case Hear:
+		if int(skip) >= len(dungeon.Objects[msg].Sounds) || skip < 0 {
+			return
+		}
 		output, err = g.vspeak(dungeon.Objects[msg].Sounds[skip], blank, args...)
 
 	case Study:
+		if int(skip) >= len(dungeon.Objects[msg].Texts) || skip < 0 {
+			return
+		}
 		output, err = g.vspeak(dungeon.Objects[msg].Texts[skip], blank, args...)
 
 	case Change:
+		if int(skip) >= len(dungeon.Objects[msg].Changes) || skip < 0 {
+			return
+		}
 		output, err = g.vspeak(dungeon.Objects[msg].Changes[skip], blank, args...)
 
 	}
@@ -1008,8 +1025,11 @@ func (g *Game) getNextLCGValue() int32 {
 }
 
 func (g *Game) randRange(rndRange int32) int32 {
-	// Generate a random number between 0 and range
-	return rndRange * g.getNextLCGValue() % LCG_M
+	// Generate a random number between 0 and range-1
+	if rndRange <= 0 {
+		return 0
+	}
+	return g.getNextLCGValue() % rndRange
 }
 
 func (g *Game) spottedByPirate(dwarfNum int) bool {

@@ -19,9 +19,22 @@ type model struct {
 	previousOutput string
 	game           *advent.Game
 	moveHistory    []string // Last N directions moved
+
+	// Command history for up/down navigation
+	commandHistory []string
+	historyIndex   int // -1 means not browsing history, 0+ means index from end
+
+	// Tab completion state
+	completions    []string
+	completionIdx  int
+	completionBase string // The partial text being completed
+
+	// Pinned location description
+	locationDesc string
 }
 
 const maxMoveHistory = 4
+const maxCommandHistory = 50
 
 func (m model) Init() tea.Cmd {
 
@@ -45,12 +58,18 @@ func initialModel(game *advent.Game) model {
 	vp.SetContent(content)
 
 	return model{
-		input:       ti,
-		gameOutput:  vp,
-		content:     content,
-		debug:       fmt.Sprintf("ZZWORD: %s\nSeedval: %d\nOutput:%s", string(game.Zzword[:]), game.Seedval, game.Output),
-		game:        game,
-		moveHistory: make([]string, 0, maxMoveHistory),
+		input:          ti,
+		gameOutput:     vp,
+		content:        content,
+		debug:          fmt.Sprintf("ZZWORD: %s\nSeedval: %d\nOutput:%s", string(game.Zzword[:]), game.Seedval, game.Output),
+		game:           game,
+		moveHistory:    make([]string, 0, maxMoveHistory),
+		commandHistory: make([]string, 0, maxCommandHistory),
+		historyIndex:   -1,
+		completions:    nil,
+		completionIdx:  0,
+		completionBase: "",
+		locationDesc:   "",
 	}
 }
 

@@ -13,7 +13,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Check if game is over - show final output and quit
 	if m.game.GameOver {
 		if m.game.Output != "" {
-			m.content += "\n" + m.game.Output + "\n"
+			highlighted := highlightOutput(m.game.Output, m.game)
+			m.content += "\n" + highlighted + "\n"
 			m.gameOutput.SetContent(m.content)
 			m.game.Output = ""
 		}
@@ -34,19 +35,76 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg: // Handle keyboard input
 		switch msg.String() {
-		case "enter": // When the user presses Enter
+		case "up": // Browse command history (older)
+			if len(m.commandHistory) > 0 {
+				if m.historyIndex < len(m.commandHistory)-1 {
+					m.historyIndex++
+				}
+				idx := len(m.commandHistory) - 1 - m.historyIndex
+				m.input.SetValue(m.commandHistory[idx])
+				m.input.CursorEnd()
+			}
+			// Clear any tab completion state
+			m.completions = nil
+			m.completionIdx = 0
+			return m, nil
 
+		case "down": // Browse command history (newer)
+			if m.historyIndex > 0 {
+				m.historyIndex--
+				idx := len(m.commandHistory) - 1 - m.historyIndex
+				m.input.SetValue(m.commandHistory[idx])
+				m.input.CursorEnd()
+			} else if m.historyIndex == 0 {
+				m.historyIndex = -1
+				m.input.SetValue("")
+			}
+			// Clear any tab completion state
+			m.completions = nil
+			m.completionIdx = 0
+			return m, nil
+
+		case "tab": // Tab completion
+			currentInput := m.input.Value()
+
+			// If we have completions, cycle through them
+			if len(m.completions) > 0 {
+				m.completionIdx = (m.completionIdx + 1) % len(m.completions)
+				m.input.SetValue(m.completions[m.completionIdx])
+				m.input.CursorEnd()
+				return m, nil
+			}
+
+			// Generate new completions
+			if currentInput != "" {
+				m.completionBase = currentInput
+				m.completions = m.game.GetCompletions(currentInput)
+				if len(m.completions) > 0 {
+					m.completionIdx = 0
+					m.input.SetValue(m.completions[0])
+					m.input.CursorEnd()
+				}
+			}
+			return m, nil
+
+		case "enter": // When the user presses Enter
 			m.previousOutput = m.game.Output
 
-			//			}
+			// Clear tab completion state
+			m.completions = nil
+			m.completionIdx = 0
 
-			// TODO: Maybe the game should handle the exit
-			// condition in the processcommand function?
-			if m.input.Value() == "exit" {
-
-				// TODO: Add prompt to save
-				return m, tea.Quit // Exit the program
+			// Add to command history (if non-empty and not a duplicate of last)
+			userCmd := m.input.Value()
+			if userCmd != "" {
+				if len(m.commandHistory) == 0 || m.commandHistory[len(m.commandHistory)-1] != userCmd {
+					m.commandHistory = append(m.commandHistory, userCmd)
+					if len(m.commandHistory) > maxCommandHistory {
+						m.commandHistory = m.commandHistory[1:]
+					}
+				}
 			}
+			m.historyIndex = -1 // Reset history browsing
 
 			if m.game.QueryFlag {
 
@@ -64,10 +122,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.output = m.game.Output
 
 					if m.game.Output != "" {
-						m.content += m.game.Output + "\n"
+						highlighted := highlightOutput(m.game.Output, m.game)
+						m.content += highlighted + "\n"
 						m.gameOutput.SetContent(m.content)
 						m.gameOutput.GotoBottom() // auto-scroll to show latest
-						m.game.Output = ""        // clear to prevent duplicate add at end of Update
+						// Only clear output if no new question was set up
+						// (nested AskQuestion calls set QueryFlag back to true)
+						if !m.game.QueryFlag {
+							m.game.Output = ""
+						}
 					}
 
 					// Ensure no movement happens on next frame to preserve query response output
@@ -80,7 +143,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				// Track location before command to detect movement
 				locBefore := m.game.Loc
-				userCmd := m.input.Value()
 
 				err := m.game.ProcessCommand(userCmd)
 
@@ -115,6 +177,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c": // Handle Ctrl+C to quit
 			return m, tea.Quit
 
+		default:
+			// Any other key clears the completion state (user is typing new text)
+			if len(m.completions) > 0 {
+				m.completions = nil
+				m.completionIdx = 0
+			}
 		}
 
 	case temporaryMessageExpiredMsg:
@@ -143,7 +211,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.game.Output != "" {
-		m.content += "\n" + m.game.Output + "\n"
+		highlighted := highlightOutput(m.game.Output, m.game)
+		m.content += "\n" + highlighted + "\n"
 		m.gameOutput.SetContent(m.content)
 		m.gameOutput.GotoBottom()
 		m.game.Output = "" // clear it so we don't re-add

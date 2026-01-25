@@ -742,6 +742,7 @@ func (g *Game) action(command *Command) PhaseCode {
 		} else if command.Obj == dungeon.OIL && g.here(dungeon.URN) &&
 			g.Objects[dungeon.URN].Prop != dungeon.URN_EMPTY {
 			command.Obj = dungeon.URN
+
 		} else if command.Obj == dungeon.PLANT && g.at(int32(dungeon.PLANT2)) &&
 			g.Objects[dungeon.PLANT2].Prop != dungeon.PLANT_THIRSTY {
 			command.Obj = dungeon.PLANT2
@@ -749,6 +750,7 @@ func (g *Game) action(command *Command) PhaseCode {
 			g.Knfloc = -1
 			g.rspeak(int32(dungeon.KNIVES_VANISH))
 			return GO_CLEAROBJ
+
 		} else if command.Obj == dungeon.ROD && g.here(dungeon.ROD2) {
 			command.Obj = dungeon.ROD2
 		} else if (command.Verb == dungeon.FIND || command.Verb == dungeon.INVENTORY) &&
@@ -2136,9 +2138,8 @@ func (g *Game) suspend() PhaseCode {
 						return game.Output
 					}
 
-					// Save successful
-					game.rspeak(int32(dungeon.RESUME_HELP))
-					game.terminate(EndGame)
+					// Save successful - continue playing
+					game.Output = fmt.Sprintf("Game saved to %s.", filename)
 					return game.Output
 				},
 			)
