@@ -194,6 +194,39 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.game.OutputType = 0 // Reset the output type
 
+	case scriptTickMsg:
+		// Execute next script command if available
+		if scriptCmd, ok := m.game.NextScriptCommand(); ok {
+			// Show the command being executed
+			m.content += "\n> " + scriptCmd + "\n"
+
+			if m.game.QueryFlag {
+				// Handle query response from script
+				m.game.QueryResponse = scriptCmd
+				m.game.QueryFlag = false
+				if m.game.OnQueryResponse != nil {
+					m.game.OnQueryResponse(m.game.QueryResponse, m.game)
+				}
+			} else {
+				// Process regular command
+				_ = m.game.ProcessCommand(scriptCmd)
+			}
+
+			// Add output and continue script execution
+			if m.game.Output != "" {
+				highlighted := highlightOutput(m.game.Output, m.game)
+				m.content += highlighted + "\n"
+				m.gameOutput.SetContent(m.content)
+				m.gameOutput.GotoBottom()
+				m.game.Output = ""
+			}
+
+			// Schedule next script command if more available
+			if m.game.HasScriptCommands() && !m.game.GameOver {
+				return m, scriptTick()
+			}
+		}
+
 	default:
 		// No command to process yet
 		// Check for forced moves (but not during a query)
@@ -239,3 +272,13 @@ func temporaryMessageTimer(duration time.Duration) tea.Cmd {
 
 // Message type for when the timer expires
 type temporaryMessageExpiredMsg struct{}
+
+// Message type for script command execution
+type scriptTickMsg struct{}
+
+// scriptTick returns a command that triggers script execution after a short delay
+func scriptTick() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+		return scriptTickMsg{}
+	})
+}

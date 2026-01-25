@@ -20,6 +20,7 @@ func main() {
 	logFileName := ""
 	autoSaveFileName := ""
 	restoreFileName := ""
+	scriptFileName := ""
 	debug := false
 	oldStyle := false
 	autoSave := true
@@ -31,6 +32,7 @@ func main() {
 	flag.BoolVar(&oldStyle, "o", false, "'Oldstyle' mode (no prompt, no command editing, displays 'Initialising...')")
 	flag.StringVar(&autoSaveFileName, "a", "", "Automatic save/restore from specified saved game file")
 	flag.StringVar(&restoreFileName, "r", "", "Restore from specified saved game file")
+	flag.StringVar(&scriptFileName, "script", "", "Execute commands from script file (one command per line, # for comments)")
 	flag.BoolVar(&debug, "d", false, "Enable debug mode")
 	flag.BoolVar(&noTUI, "notui", false, "Run without TUI (classic terminal mode)")
 	flag.BoolVar(&enableTracing, "trace", false, "Enable OpenTelemetry tracing (sends to localhost:4318 by default)")
@@ -68,6 +70,17 @@ func main() {
 	}
 
 	game := advent.NewGame(0, restoreFileName, autoSaveFileName, logFileName, debug, oldStyle, autoSave, scripts)
+
+	// Load script file if specified
+	if scriptFileName != "" {
+		if err := game.LoadScript(scriptFileName); err != nil {
+			fmt.Printf("Error loading script: %v\n", err)
+			return
+		}
+		if debug {
+			fmt.Printf("Loaded %d commands from script\n", len(game.ScriptCommands))
+		}
+	}
 
 	// Set the tracing context on the game
 	game.Ctx = ctx
@@ -119,13 +132,20 @@ func runClassicMode(game *advent.Game) {
 		// Check for queries
 		if game.QueryFlag {
 			fmt.Print(game.Output)
-			fmt.Print("\n> ")
-			response, err := reader.ReadString('\n')
-			if err != nil {
-				fmt.Println("Error reading input:", err)
-				return
+			var response string
+			if cmd, ok := game.NextScriptCommand(); ok {
+				response = cmd
+				fmt.Printf("\n> %s\n", response) // Echo the script command
+			} else {
+				fmt.Print("\n> ")
+				var err error
+				response, err = reader.ReadString('\n')
+				if err != nil {
+					fmt.Println("Error reading input:", err)
+					return
+				}
+				response = strings.TrimSpace(response)
 			}
-			response = strings.TrimSpace(response)
 
 			game.QueryResponse = response
 			game.QueryFlag = false
@@ -151,15 +171,21 @@ func runClassicMode(game *advent.Game) {
 			continue
 		}
 
-		// Get command from user
-		fmt.Print("> ")
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			fmt.Println("Error reading input:", err)
-			return
+		// Get command from script or user
+		var input string
+		if cmd, ok := game.NextScriptCommand(); ok {
+			input = cmd
+			fmt.Printf("> %s\n", input) // Echo the script command
+		} else {
+			fmt.Print("> ")
+			var err error
+			input, err = reader.ReadString('\n')
+			if err != nil {
+				fmt.Println("Error reading input:", err)
+				return
+			}
+			input = strings.TrimSpace(input)
 		}
-
-		input = strings.TrimSpace(input)
 
 		// Handle exit
 		if strings.ToLower(input) == "quit" || strings.ToLower(input) == "exit" {
@@ -172,8 +198,7 @@ func runClassicMode(game *advent.Game) {
 		}
 
 		// Process command
-		err = game.ProcessCommand(input)
-		if err != nil {
+		if err := game.ProcessCommand(input); err != nil {
 			fmt.Println("Error:", err)
 		} else {
 			fmt.Println(game.Output)

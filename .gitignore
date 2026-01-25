@@ -34,6 +34,7 @@ dungeon/dungeon.go
 dungeon/dungeonTypes.go
 *.save
 *.sav
+testscript.txt
 
 
 #Binary

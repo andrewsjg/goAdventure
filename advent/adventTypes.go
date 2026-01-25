@@ -12,7 +12,12 @@ type Game struct {
 	LocationSpan trace.Span      `json:"-"` // Current location span
 	LocationCtx  context.Context `json:"-"` // Context for current location span
 	GameOver     bool            `json:"-"` // Set when game should exit
-	QueryFlag    bool
+
+	// Script execution state
+	ScriptCommands []string `json:"-"` // Commands to execute from script
+	ScriptIndex    int      `json:"-"` // Current position in script
+
+	QueryFlag bool
 	QueryResponse   string
 	OnQueryResponse func(response string, game *Game) string `json:"-"`
 	Output          string

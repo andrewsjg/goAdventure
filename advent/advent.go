@@ -1,6 +1,7 @@
 package advent
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -253,6 +254,52 @@ func NewGame(seed int, restoreFileName string, autoSaveFileName string, logFileN
 	}
 
 	return game
+}
+
+// LoadScript reads a script file and populates ScriptCommands.
+// Lines starting with # are comments and are ignored.
+// Empty lines are also ignored.
+func (g *Game) LoadScript(filename string) error {
+	file, err := os.Open(filename)
+	if err != nil {
+		return fmt.Errorf("failed to open script file: %w", err)
+	}
+	defer file.Close()
+
+	var commands []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		commands = append(commands, line)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error reading script file: %w", err)
+	}
+
+	g.ScriptCommands = commands
+	g.ScriptIndex = 0
+	return nil
+}
+
+// NextScriptCommand returns the next command from the script, or empty string if none.
+// Returns the command and a bool indicating if there was a command.
+func (g *Game) NextScriptCommand() (string, bool) {
+	if g.ScriptIndex >= len(g.ScriptCommands) {
+		return "", false
+	}
+	cmd := g.ScriptCommands[g.ScriptIndex]
+	g.ScriptIndex++
+	return cmd, true
+}
+
+// HasScriptCommands returns true if there are more script commands to execute.
+func (g *Game) HasScriptCommands() bool {
+	return g.ScriptIndex < len(g.ScriptCommands)
 }
 
 func (g *Game) CheckHints() {

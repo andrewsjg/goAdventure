@@ -37,7 +37,10 @@ const maxMoveHistory = 4
 const maxCommandHistory = 50
 
 func (m model) Init() tea.Cmd {
-
+	// Start script execution if there are script commands
+	if m.game.HasScriptCommands() {
+		return tea.Batch(textinput.Blink, scriptTick())
+	}
 	return textinput.Blink
 }
 
