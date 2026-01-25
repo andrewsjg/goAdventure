@@ -1,6 +1,7 @@
 package advent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -9,14 +10,51 @@ import (
 	"strings"
 
 	"github.com/andrewsjg/goAdventure/dungeon"
+	"github.com/andrewsjg/goAdventure/telemetry"
 )
 
 // TODO: Implement settings
 // TODO: Split this up?
 
+// StartLocationSpan ends the current location span (if any) and starts a new one
+func (g *Game) StartLocationSpan(loc int32) {
+	// End previous location span if it exists
+	if g.LocationSpan != nil {
+		g.LocationSpan.End()
+	}
+
+	// Get location name
+	locationName := "Unknown"
+	if loc > 0 && int(loc) < len(dungeon.Locations) {
+		locationName = dungeon.Locations[loc].Description.Small
+		if locationName == "" {
+			locationName = fmt.Sprintf("Location %d", loc)
+		}
+	}
+
+	// Start new location span as child of the root context
+	ctx, span := telemetry.StartSpan(g.Ctx, "At "+locationName)
+	span.SetAttributes(
+		telemetry.AttrLocation.Int(int(loc)),
+		telemetry.AttrLocationName.String(locationName),
+	)
+
+	g.LocationSpan = span
+	g.LocationCtx = ctx
+}
+
+// EndLocationSpan ends the current location span (call when game ends)
+func (g *Game) EndLocationSpan() {
+	if g.LocationSpan != nil {
+		g.LocationSpan.End()
+		g.LocationSpan = nil
+	}
+}
+
 func NewGame(seed int, restoreFileName string, autoSaveFileName string, logFileName string, debug bool, oldStyle bool, autoSave bool, scripts []string) Game {
 
 	game := Game{}
+	game.Ctx = context.Background()
 
 	game.Settings.LogFileName = logFileName
 	game.Settings.AutoSaveFileName = autoSaveFileName
@@ -414,6 +452,10 @@ func (g *Game) DescribeLocation() {
 }
 
 func (g *Game) DoMove() bool {
+	toLoc := g.Newloc
+
+	// End current location span and start a new one for the new location
+	g.StartLocationSpan(toLoc)
 
 	// Can't leave cave once it's closing (except by main office)
 	if outside(g.Newloc) && g.Newloc != 0 && g.Closing {
@@ -1080,6 +1122,18 @@ func (g *Game) carry(object, where int32) {
 
 		g.Objects[object].Place = CARRIED
 
+		// Add telemetry event for picking up object
+		if span := telemetry.SpanFromContext(g.Ctx); span != nil {
+			objectName := ""
+			if int(object) < len(dungeon.Objects) {
+				objectName = dungeon.Objects[object].Inventory
+			}
+			telemetry.AddGameEvent(span, "item.pickup",
+				telemetry.AttrObject.Int(int(object)),
+				telemetry.AttrInventory.String(objectName),
+			)
+		}
+
 		/*
 		 * Without this conditional your inventory is overcounted
 		 * when you pick up the bird while it's caged. This fixes
@@ -1120,6 +1174,19 @@ func (g *Game) drop(object, where int32) {
 		g.Objects[object-dungeon.NOBJECTS].Fixed = where
 	} else {
 		if g.Objects[object].Place == CARRIED {
+			// Add telemetry event for dropping object
+			if span := telemetry.SpanFromContext(g.Ctx); span != nil {
+				objectName := ""
+				if int(object) < len(dungeon.Objects) {
+					objectName = dungeon.Objects[object].Inventory
+				}
+				telemetry.AddGameEvent(span, "item.drop",
+					telemetry.AttrObject.Int(int(object)),
+					telemetry.AttrInventory.String(objectName),
+					telemetry.AttrLocation.Int(int(where)),
+				)
+			}
+
 			if object != int32(dungeon.BIRD) {
 				/* The bird has to be weightless.  This ugly
 				 * hack (and the corresponding code in the carry

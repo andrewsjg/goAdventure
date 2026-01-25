@@ -6,6 +6,7 @@ import (
 	"unicode"
 
 	"github.com/andrewsjg/goAdventure/dungeon"
+	"github.com/andrewsjg/goAdventure/telemetry"
 )
 
 // This take the command and tokenises it into a command structure.
@@ -278,67 +279,89 @@ func (g *Game) preProcessCommand(command *Command) bool {
 }
 
 func (g *Game) ProcessCommand(command string) error {
+	cmd := strings.ToUpper(command)
 
-	var err error
+	// Handle empty command - just redescribe location, don't count as a turn
+	if cmd == "" {
+		g.Output = ""
+		g.DescribeLocation()
+		g.ListObjects()
+		return nil
+	}
+
 	// Clear output from previous command
 	g.Output = ""
 
-	cmd := strings.ToUpper(command)
-
-	// Game start condition
-	// If this is the start of a new game and the command is yes
-	// then the player has asked for instructions. This is kind of a kludge.
-	// Can probably improve by using AskQuestion.
-
+	// Game start condition - handle yes/no for instructions prompt
+	// This doesn't count as a regular turn
 	if g.Settings.NewGame && strings.Contains(cmd, "Y") {
 		g.Output = dungeon.Arbitrary_Messages[dungeon.CAVE_NEARBY]
 		g.Novice = true
-		g.Limit = NOVICELIMIT // Numner of turns allowed for a novice player
-
-		// Reset new game flag since the game has now progressed
+		g.Limit = NOVICELIMIT
 		g.Settings.NewGame = false
-
+		return nil
 	} else if g.Settings.NewGame && strings.Contains(cmd, "N") {
 		g.Output = dungeon.Arbitrary_Messages[dungeon.NO_MESSAGE]
-		// Reset new game flag since the game has now progressed
 		g.Settings.NewGame = false
 		g.DescribeLocation()
 		g.ListObjects()
+		return nil
+	} else if g.Settings.NewGame {
+		// Any other input during new game prompt - re-ask
+		g.Output = dungeon.Arbitrary_Messages[dungeon.WELCOME_YOU]
+		return nil
+	}
 
-	} else if g.Settings.EnableDebug && cmd == "ZZTEST" {
+	// Tokenize command to check if it's valid before counting as a turn
+	tokCmd := g.tokeniseCommand(command)
+	if len(tokCmd.Word) == 0 || tokCmd.Word[0].ID == WORD_NOT_FOUND {
+		// Invalid command - don't count as a turn
+		g.sspeak(dungeon.DONT_KNOW, cmd)
+		return nil
+	}
 
-		// Should write this as a test
+	// Valid command - now count as a turn and create tracing span
+	g.Turns++
 
-		// No Word  == 0
-		// Motion   == 1
-		// Object   == 2
-		// Action   == 3
-		// Numeric  == 4
+	// Use location context if available, otherwise use root context
+	parentCtx := g.Ctx
+	if g.LocationCtx != nil {
+		parentCtx = g.LocationCtx
+	}
 
-		cmd := "Carry stream" // 3
-		// cmd := "Enter stream" // 1
+	// Start a span for this turn as child of location span
+	ctx, span := telemetry.StartSpan(parentCtx, "Turn: "+command)
+	defer span.End()
 
-		//cmd := "LAMP STREAM" // 2
+	// Store context so events can be attached to this span
+	oldCtx := g.Ctx
+	g.Ctx = ctx
+	defer func() { g.Ctx = oldCtx }()
 
-		tokCmd := g.tokeniseCommand(cmd)
+	span.SetAttributes(
+		telemetry.AttrCommand.String(command),
+		telemetry.AttrTurns.Int(int(g.Turns)),
+		telemetry.AttrLocation.Int(int(g.Loc)),
+	)
 
-		g.Output = fmt.Sprintf("ZZTEST: %d, %s\n", tokCmd.Word[0].WordType, tokCmd.Word[1].Raw)
+	var err error
 
-	} else if cmd == "" {
-		g.DescribeLocation()
-		g.ListObjects()
-
+	if g.Settings.EnableDebug && cmd == "ZZTEST" {
+		// Debug test command
+		testCmd := "Carry stream"
+		testTokCmd := g.tokeniseCommand(testCmd)
+		g.Output = fmt.Sprintf("ZZTEST: %d, %s\n", testTokCmd.Word[0].WordType, testTokCmd.Word[1].Raw)
 	} else {
 
 		// We just got some input from the user
 
 		/*
 			if g.Settings.EnableDebug {
-				if len(cmd.Word) == 1 {
+				if len(tokCmd.Word) == 1 {
 
-					g.Output = cmd.Word[0].Raw
-				} else if len(cmd.Word) == 2 {
-					g.Output = cmd.Word[0].Raw + " " + cmd.Word[1].Raw
+					g.Output = tokCmd.Word[0].Raw
+				} else if len(tokCmd.Word) == 2 {
+					g.Output = tokCmd.Word[0].Raw + " " + tokCmd.Word[1].Raw
 				} else {
 					//g.DescribeLocation()
 				}
@@ -387,10 +410,8 @@ func (g *Game) ProcessCommand(command string) error {
 			g.Foobar = 0
 		}
 
-		g.Turns++
-		// Put the input into a command structure and pre-process
-		cmd := g.tokeniseCommand(command)
-		g.preProcessCommand(&cmd)
+		// Use already tokenized command and pre-process
+		g.preProcessCommand(&tokCmd)
 
 		/* check if game is closed, and exit if it is */
 		if g.closeCheck() {
@@ -402,22 +423,22 @@ func (g *Game) ProcessCommand(command string) error {
 
 		// TODO: Revisit
 
-		for cmd.CmdState == PREPROCESSED {
-			cmd.CmdState = PROCESSING
+		for tokCmd.CmdState == PREPROCESSED {
+			tokCmd.CmdState = PROCESSING
 
-			if len(cmd.Word) > 0 && cmd.Word[0].ID == WORD_NOT_FOUND {
-				g.sspeak(dungeon.DONT_KNOW, cmd.Word[0].Raw)
-				cmd.Word = []Command_Word{} // Clear the command
+			if len(tokCmd.Word) > 0 && tokCmd.Word[0].ID == WORD_NOT_FOUND {
+				g.sspeak(dungeon.DONT_KNOW, tokCmd.Word[0].Raw)
+				tokCmd.Word = []Command_Word{} // Clear the command
 				continue
 			}
 
 			// If command is empty, skip processing
-			if len(cmd.Word) == 0 {
+			if len(tokCmd.Word) == 0 {
 				break
 			}
 
 			/* Give user hints of shortcuts */
-			if strnCaseCmpEqual(cmd.Word[0].Raw, "WEST", len("WEST")) {
+			if strnCaseCmpEqual(tokCmd.Word[0].Raw, "WEST", len("WEST")) {
 
 				g.Iwest++
 				if g.Iwest == 10 {
@@ -425,35 +446,35 @@ func (g *Game) ProcessCommand(command string) error {
 				}
 			}
 
-			if len(cmd.Word) > 1 && strnCaseCmpEqual(cmd.Word[0].Raw, "GO", len("GO")) && cmd.Word[1].ID != WORD_EMPTY {
+			if len(tokCmd.Word) > 1 && strnCaseCmpEqual(tokCmd.Word[0].Raw, "GO", len("GO")) && tokCmd.Word[1].ID != WORD_EMPTY {
 				g.Igo++
 				if g.Igo == 10 {
 					g.rspeak(int32(dungeon.GO_UNNEEDED))
 				}
 			}
 
-			switch cmd.Word[0].WordType {
+			switch tokCmd.Word[0].WordType {
 			case MOTION:
-				g.PlayerMove(int32(cmd.Word[0].ID))
-				cmd.CmdState = EXECUTED
+				g.PlayerMove(int32(tokCmd.Word[0].ID))
+				tokCmd.CmdState = EXECUTED
 				continue
 
 			case OBJECT:
-				cmd.Part = Unknown
-				cmd.Obj = cmd.Word[0].ID
+				tokCmd.Part = Unknown
+				tokCmd.Obj = tokCmd.Word[0].ID
 				break
 			case ACTION:
-				if len(cmd.Word) > 1 && cmd.Word[1].WordType == NUMERIC {
-					cmd.Part = Transitive
+				if len(tokCmd.Word) > 1 && tokCmd.Word[1].WordType == NUMERIC {
+					tokCmd.Part = Transitive
 				} else {
-					cmd.Part = Intransitive
+					tokCmd.Part = Intransitive
 				}
-				cmd.Verb = cmd.Word[0].ID
+				tokCmd.Verb = tokCmd.Word[0].ID
 				break
 			case NUMERIC:
 				if !g.Settings.OldStyle {
-					g.sspeak(dungeon.DONT_KNOW, cmd.Word[0].Raw)
-					cmd = Command{}
+					g.sspeak(dungeon.DONT_KNOW, tokCmd.Word[0].Raw)
+					tokCmd = Command{}
 					continue
 				}
 				break
@@ -463,35 +484,35 @@ func (g *Game) ProcessCommand(command string) error {
 			}
 
 			// Execute the action
-			phaseCode := g.action(&cmd)
+			phaseCode := g.action(&tokCmd)
 
 			switch phaseCode {
 			case GO_TERMINATE:
-				cmd.CmdState = EXECUTED
+				tokCmd.CmdState = EXECUTED
 				break
 			case GO_MOVE:
 				g.PlayerMove(int32(dungeon.NUL))
-				cmd.CmdState = EXECUTED
+				tokCmd.CmdState = EXECUTED
 				break
 			case GO_WORD2:
 				// Get second word for analysis
-				if len(cmd.Word) > 1 {
-					cmd.Word[0] = cmd.Word[1]
-					cmd.Word = cmd.Word[:1]
+				if len(tokCmd.Word) > 1 {
+					tokCmd.Word[0] = tokCmd.Word[1]
+					tokCmd.Word = tokCmd.Word[:1]
 				}
-				cmd.CmdState = PREPROCESSED
+				tokCmd.CmdState = PREPROCESSED
 				break
 			case GO_UNKNOWN:
 				// Random intransitive verbs come here
-				if len(cmd.Word[0].Raw) > 0 {
-					cmd.Word[0].Raw = strings.ToUpper(cmd.Word[0].Raw[:1]) + cmd.Word[0].Raw[1:]
+				if len(tokCmd.Word[0].Raw) > 0 {
+					tokCmd.Word[0].Raw = strings.ToUpper(tokCmd.Word[0].Raw[:1]) + tokCmd.Word[0].Raw[1:]
 				}
-				g.sspeak(dungeon.DO_WHAT, cmd.Word[0].Raw)
-				cmd.Obj = NO_OBJECT
-				cmd.CmdState = GIVEN
+				g.sspeak(dungeon.DO_WHAT, tokCmd.Word[0].Raw)
+				tokCmd.Obj = NO_OBJECT
+				tokCmd.CmdState = GIVEN
 				break
 			case GO_CHECKHINT:
-				cmd.CmdState = GIVEN
+				tokCmd.CmdState = GIVEN
 				break
 			case GO_DWARFWAKE:
 				// Oh dear, he's disturbed the dwarves
@@ -499,7 +520,7 @@ func (g *Game) ProcessCommand(command string) error {
 				g.terminate(EndGame)
 				break
 			case GO_CLEAROBJ:
-				cmd = Command{}
+				tokCmd = Command{}
 				break
 			case GO_TOP:
 				break

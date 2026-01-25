@@ -1,9 +1,17 @@
 package advent
 
-import "github.com/andrewsjg/goAdventure/dungeon"
+import (
+	"context"
+
+	"github.com/andrewsjg/goAdventure/dungeon"
+	"go.opentelemetry.io/otel/trace"
+)
 
 type Game struct {
-	QueryFlag       bool
+	Ctx          context.Context `json:"-"` // Context for tracing
+	LocationSpan trace.Span      `json:"-"` // Current location span
+	LocationCtx  context.Context `json:"-"` // Context for current location span
+	QueryFlag    bool
 	QueryResponse   string
 	OnQueryResponse func(response string, game *Game) string `json:"-"`
 	Output          string

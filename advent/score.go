@@ -72,6 +72,7 @@ func (g *Game) score(mode Termination) int {
 func (g *Game) calculateScore(endGame bool) int {
 
 	score := 0
+	mxscr = 0
 
 	/*  The present scoring algorithm is as follows:
 	 *     Objective:          Points:        Present total possible:

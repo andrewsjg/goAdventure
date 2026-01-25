@@ -2,12 +2,14 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/andrewsjg/goAdventure/advent"
+	"github.com/andrewsjg/goAdventure/telemetry"
 	"github.com/andrewsjg/goAdventure/tui"
 )
 
@@ -22,6 +24,8 @@ func main() {
 	oldStyle := false
 	autoSave := true
 	noTUI := false
+	enableTracing := false
+	tracingEndpoint := ""
 
 	flag.StringVar(&logFileName, "l", "", "Create a log file of your game named as specified")
 	flag.BoolVar(&oldStyle, "o", false, "'Oldstyle' mode (no prompt, no command editing, displays 'Initialising...')")
@@ -29,6 +33,8 @@ func main() {
 	flag.StringVar(&restoreFileName, "r", "", "Restore from specified saved game file")
 	flag.BoolVar(&debug, "d", false, "Enable debug mode")
 	flag.BoolVar(&noTUI, "notui", false, "Run without TUI (classic terminal mode)")
+	flag.BoolVar(&enableTracing, "trace", false, "Enable OpenTelemetry tracing (sends to localhost:4318 by default)")
+	flag.StringVar(&tracingEndpoint, "trace-endpoint", "", "OpenTelemetry OTLP endpoint (e.g., localhost:4318)")
 
 	// Parse the command-line flags
 	flag.Parse()
@@ -36,12 +42,41 @@ func main() {
 	// The remaining arguments are scripts
 	scripts := flag.Args()
 
+	// Initialize tracing
+	ctx := context.Background()
+	tracingCfg := telemetry.Config{
+		Enabled:      enableTracing,
+		OTLPEndpoint: tracingEndpoint,
+	}
+	shutdownTracing, err := telemetry.InitTracing(ctx, tracingCfg)
+	if err != nil {
+		fmt.Printf("Warning: Failed to initialize tracing: %v\n", err)
+	}
+	defer func() {
+		if shutdownTracing != nil {
+			_ = shutdownTracing(ctx)
+		}
+	}()
+
+	if enableTracing && debug {
+		fmt.Println("OpenTelemetry tracing enabled")
+	}
+
 	// Initialize the game
 	if debug {
 		fmt.Println("Initializing game...")
 	}
 
 	game := advent.NewGame(0, restoreFileName, autoSaveFileName, logFileName, debug, oldStyle, autoSave, scripts)
+
+	// Set the tracing context on the game
+	game.Ctx = ctx
+
+	// Start initial location span if tracing is enabled
+	if enableTracing {
+		game.StartLocationSpan(game.Loc)
+		defer game.EndLocationSpan()
+	}
 
 	if game.Settings.EnableDebug {
 		fmt.Println("Starting game...")
