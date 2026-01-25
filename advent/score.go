@@ -2,17 +2,12 @@ package advent
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/andrewsjg/goAdventure/dungeon"
 )
 
 // I hate this. Make it part of the game struct?
 var mxscr = 0
-
-const (
-	EXIT_SUCCESS = 0
-)
 
 func (g *Game) terminate(mode Termination) {
 	points := g.score(mode)
@@ -45,12 +40,13 @@ func (g *Game) terminate(mode Termination) {
 				g.rspeak(int32(dungeon.NO_HIGHER))
 			}
 
-			os.Exit(EXIT_SUCCESS)
+			g.GameOver = true
+			return
 		}
 	}
 
 	g.rspeak(int32(dungeon.OFF_SCALE))
-	os.Exit(EXIT_SUCCESS)
+	g.GameOver = true
 }
 
 // GetScore returns the current score without side effects (for UI display)

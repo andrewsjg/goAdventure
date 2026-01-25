@@ -11,6 +11,7 @@ type Game struct {
 	Ctx          context.Context `json:"-"` // Context for tracing
 	LocationSpan trace.Span      `json:"-"` // Current location span
 	LocationCtx  context.Context `json:"-"` // Context for current location span
+	GameOver     bool            `json:"-"` // Set when game should exit
 	QueryFlag    bool
 	QueryResponse   string
 	OnQueryResponse func(response string, game *Game) string `json:"-"`

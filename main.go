@@ -107,6 +107,15 @@ func runClassicMode(game *advent.Game) {
 
 	// Main game loop
 	for {
+		// Check if game is over
+		if game.GameOver {
+			if game.Output != "" {
+				fmt.Println(game.Output)
+			}
+			fmt.Println("\nThanks for playing!")
+			return
+		}
+
 		// Check for queries
 		if game.QueryFlag {
 			fmt.Print(game.Output)

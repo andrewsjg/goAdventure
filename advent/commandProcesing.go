@@ -540,9 +540,13 @@ func (g *Game) AskQuestion(query string, callback func(response string, game *Ga
 	g.QueryFlag = true
 	g.QueryResponse = ""
 
-	g.Output = query
+	// Append query to existing output so previous messages aren't lost
+	if g.Output != "" {
+		g.Output = g.Output + "\n\n" + query
+	} else {
+		g.Output = query
+	}
 	g.OnQueryResponse = callback
-
 }
 
 func (g *Game) closeCheck() bool {

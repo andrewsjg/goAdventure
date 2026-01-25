@@ -10,6 +10,16 @@ import (
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
+	// Check if game is over - show final output and quit
+	if m.game.GameOver {
+		if m.game.Output != "" {
+			m.content += "\n" + m.game.Output + "\n"
+			m.gameOutput.SetContent(m.content)
+			m.game.Output = ""
+		}
+		return m, tea.Quit
+	}
+
 	// Perform the move if newloc has been set (but not if waiting for query response)
 	if m.game.Newloc != m.game.Loc && !m.game.QueryFlag {
 		m.game.DoMove()
@@ -53,9 +63,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					m.output = m.game.Output
 
-					m.content += m.game.Output + "\n"
-					m.gameOutput.SetContent(m.content)
-					m.gameOutput.GotoBottom() // auto-scroll to show latest
+					if m.game.Output != "" {
+						m.content += m.game.Output + "\n"
+						m.gameOutput.SetContent(m.content)
+						m.gameOutput.GotoBottom() // auto-scroll to show latest
+						m.game.Output = ""        // clear to prevent duplicate add at end of Update
+					}
 
 					// Ensure no movement happens on next frame to preserve query response output
 					m.game.Newloc = m.game.Loc

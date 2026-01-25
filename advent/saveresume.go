@@ -181,10 +181,37 @@ func isValidGameState(g *Game) bool {
 	return true
 }
 
-// AutoSave saves the game to the autosave file if autosave is enabled
+// AutoSave saves the game to the autosave file if autosave is enabled.
+// Keeps the last 4 save states by rotating older saves.
 func (g *Game) AutoSave() error {
-	if g.Settings.Autosave && g.Settings.AutoSaveFileName != "" {
-		return g.SaveToFile(g.Settings.AutoSaveFileName)
+	if !g.Settings.Autosave || g.Settings.AutoSaveFileName == "" {
+		return nil
 	}
-	return nil
+
+	baseFilename := g.Settings.AutoSaveFileName
+
+	// Rotate existing saves: delete .3, rename .2->.3, .1->.2, base->.1
+	// This keeps the last 4 saves (base, .1, .2, .3)
+	for i := 3; i >= 1; i-- {
+		older := fmt.Sprintf("%s.%d", baseFilename, i)
+		if i == 3 {
+			// Delete the oldest backup
+			os.Remove(older)
+		}
+		if i == 1 {
+			// Rename base file to .1
+			if _, err := os.Stat(baseFilename); err == nil {
+				os.Rename(baseFilename, older)
+			}
+		} else {
+			// Rename .{i-1} to .{i}
+			newer := fmt.Sprintf("%s.%d", baseFilename, i-1)
+			if _, err := os.Stat(newer); err == nil {
+				os.Rename(newer, older)
+			}
+		}
+	}
+
+	// Save current state to base filename
+	return g.SaveToFile(baseFilename)
 }

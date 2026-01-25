@@ -3,6 +3,7 @@ package telemetry
 import (
 	"context"
 	"os"
+	"strings"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -79,6 +80,18 @@ func InitTracing(ctx context.Context, cfg Config) (func(context.Context) error, 
 
 	// Register as global tracer provider
 	otel.SetTracerProvider(tp)
+
+	// Set custom error handler to suppress connection errors
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
+		// Silently ignore connection refused errors (no collector running)
+		if strings.Contains(err.Error(), "connection refused") {
+			return
+		}
+		// Silently ignore other export errors
+		if strings.Contains(err.Error(), "traces export") {
+			return
+		}
+	}))
 
 	// Get tracer for our service
 	tracer = tp.Tracer(serviceName)

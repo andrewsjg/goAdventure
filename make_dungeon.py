@@ -664,7 +664,6 @@ if __name__ == "__main__":
         dwarflocs=", ".join(db["dwarflocs"]) + ",",
     )
 
-    print(c)
     # 0-origin index of birds's last song.  Bird should
     # die after player hears this.
     deathbird = len(dict(db["objects"])["BIRD"]["sounds"]) - 1

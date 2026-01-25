@@ -25,9 +25,19 @@ go.work.sum
 # env file
 .env
 
+# Local config
+.venv
+.vscode
+.claude
+
 dungeon/dungeon.go
 dungeon/dungeonTypes.go
 *.save
+*.sav
+
 
 #Binary
 goAdventure
+
+# Added by goreleaser init:
+dist/
