@@ -46,7 +46,7 @@ func (m model) Init() tea.Cmd {
 
 func initialModel(game *advent.Game) model {
 	ti := textinput.New()
-	ti.Placeholder = "Type something..."
+	ti.Placeholder = "What would you like to do?"
 	ti.Focus()
 	ti.CharLimit = 156
 	ti.Width = 20

@@ -299,16 +299,21 @@ func (g *Game) ProcessCommand(command string) error {
 		g.Novice = true
 		g.Limit = NOVICELIMIT
 		g.Settings.NewGame = false
+
 		return nil
+
 	} else if g.Settings.NewGame && strings.Contains(cmd, "N") {
 		g.Output = dungeon.Arbitrary_Messages[dungeon.NO_MESSAGE]
 		g.Settings.NewGame = false
 		g.DescribeLocation()
 		g.ListObjects()
+
 		return nil
+
 	} else if g.Settings.NewGame {
 		// Any other input during new game prompt - re-ask
 		g.Output = dungeon.Arbitrary_Messages[dungeon.WELCOME_YOU]
+
 		return nil
 	}
 
@@ -317,6 +322,7 @@ func (g *Game) ProcessCommand(command string) error {
 	if len(tokCmd.Word) == 0 || tokCmd.Word[0].ID == WORD_NOT_FOUND {
 		// Invalid command - don't count as a turn
 		g.sspeak(dungeon.DONT_KNOW, cmd)
+
 		return nil
 	}
 
@@ -515,7 +521,7 @@ func (g *Game) ProcessCommand(command string) error {
 				tokCmd.CmdState = GIVEN
 				break
 			case GO_DWARFWAKE:
-				// Oh dear, he's disturbed the dwarves
+				// Oh dear, the player has disturbed the dwarves
 				g.rspeak(int32(dungeon.DWARVES_AWAKEN))
 				g.terminate(EndGame)
 				break

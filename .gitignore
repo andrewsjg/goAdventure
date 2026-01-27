@@ -33,6 +33,7 @@ go.work.sum
 dungeon/dungeon.go
 dungeon/dungeonTypes.go
 *.save
+*.save.*
 *.sav
 testscript.txt
 
