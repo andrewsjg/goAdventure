@@ -11,7 +11,7 @@ There is an accompanying Blog Post (coming soon) about wh and how this was creat
 
 ## Installation
 
-### Homebrew
+The latest binaries can be found on the [releases page](https://github.com/andrewsjg/goAdventure/releases)
 
 ## Building from source
 
