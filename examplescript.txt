@@ -1,0 +1,25 @@
+ # Test Script. Get the bird.
+  y
+  # Navigate to grate
+  e
+  e
+  # Pick up items
+  get lamp
+  get keys
+  get food
+  w
+  s
+  s
+  s
+  unlock grate
+  d
+  w
+  get cage
+  w
+  light lamp
+  get rod
+  w
+  w
+  drop rod
+  get bird
+  get rod
