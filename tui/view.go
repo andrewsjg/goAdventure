@@ -143,7 +143,25 @@ func (m model) View() string {
 		Foreground(lipgloss.Color("240")).
 		PaddingLeft(1)
 
-	footerText := footerStyle.Render(fmt.Sprintf("Score: %d  |  Turns: %d", m.game.GetScore(), m.game.Turns))
+	var footerContent string
+	if m.aiEnabled {
+		aiModeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("212")).Bold(true)
+		if m.aiIsThinking {
+			thinkingStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+			footerContent = fmt.Sprintf("Score: %d  |  Turns: %d  |  %s  |  %s %s",
+				m.game.GetScore(), m.game.Turns,
+				aiModeStyle.Render("AI Mode"),
+				m.aiSpinner.View(),
+				thinkingStyle.Render("thinking..."))
+		} else {
+			footerContent = fmt.Sprintf("Score: %d  |  Turns: %d  |  %s",
+				m.game.GetScore(), m.game.Turns,
+				aiModeStyle.Render("AI Mode"))
+		}
+	} else {
+		footerContent = fmt.Sprintf("Score: %d  |  Turns: %d", m.game.GetScore(), m.game.Turns)
+	}
+	footerText := footerStyle.Render(footerContent)
 
 	// Title banner
 	titleString := strings.Join([]string{
@@ -158,9 +176,7 @@ func (m model) View() string {
 
 	titleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("186"))
 	title := titleStyle.Render(titleString)
-	headerText := fmt.Sprintf(title)
-
-	header := fmt.Sprintf("%s", headerText)
+	header := title
 
 	mainScreen := lipgloss.JoinHorizontal(lipgloss.Top, mainColumn, gap, rightColumn)
 

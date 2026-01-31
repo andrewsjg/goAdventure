@@ -1359,6 +1359,8 @@ func (g *Game) PlayerMove(motion int32) {
 		g.Detail++
 		g.Wzdark = false
 		g.Locs[g.Loc].Abbrev = 0
+		g.DescribeLocation()
+		g.ListObjects()
 		return
 	} else if motion == int32(dungeon.CAVE) {
 		/* Cave.  Different messages depending on whether above ground. */

@@ -2,11 +2,15 @@ package tui
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/andrewsjg/goAdventure/advent"
+	"github.com/andrewsjg/goAdventure/ollama"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // Define the model
@@ -31,6 +35,17 @@ type model struct {
 
 	// Pinned location description
 	locationDesc string
+
+	// AI player fields
+	aiPlayer      *ollama.Player
+	aiEnabled     bool
+	aiDelay       time.Duration
+	showThinking  bool
+	aiThinking    string // Last AI reasoning (for display)
+	aiIsThinking  bool   // True when waiting for AI response
+	aiSpinner     spinner.Model
+	rewardTracker *ollama.RewardTracker // Tracks action rewards for AI feedback
+	lastScore     int                   // Score before last AI action
 }
 
 const maxMoveHistory = 4
@@ -41,10 +56,14 @@ func (m model) Init() tea.Cmd {
 	if m.game.HasScriptCommands() {
 		return tea.Batch(textinput.Blink, scriptTick())
 	}
+	// Start AI execution if AI is enabled
+	if m.aiEnabled && m.aiPlayer != nil {
+		return tea.Batch(textinput.Blink, m.aiSpinner.Tick, aiTick(m.aiDelay))
+	}
 	return textinput.Blink
 }
 
-func initialModel(game *advent.Game) model {
+func initialModel(game *advent.Game, aiPlayer *ollama.Player, rewardTracker *ollama.RewardTracker, showThinking bool, aiDelay time.Duration) model {
 	ti := textinput.New()
 	ti.Placeholder = "What would you like to do?"
 	ti.Focus()
@@ -60,6 +79,11 @@ func initialModel(game *advent.Game) model {
 	}
 	vp.SetContent(content)
 
+	// Create spinner for AI thinking indicator
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+
 	return model{
 		input:          ti,
 		gameOutput:     vp,
@@ -73,11 +97,20 @@ func initialModel(game *advent.Game) model {
 		completionIdx:  0,
 		completionBase: "",
 		locationDesc:   "",
+		aiPlayer:       aiPlayer,
+		aiEnabled:      aiPlayer != nil,
+		aiDelay:        aiDelay,
+		showThinking:   showThinking,
+		aiThinking:     "",
+		aiIsThinking:   false,
+		aiSpinner:      sp,
+		rewardTracker:  rewardTracker,
+		lastScore:      0,
 	}
 }
 
-func NewAdventure(game *advent.Game) *tea.Program {
-	m := initialModel(game)
+func NewAdventure(game *advent.Game, aiPlayer *ollama.Player, rewardTracker *ollama.RewardTracker, showThinking bool, aiDelay time.Duration) *tea.Program {
+	m := initialModel(game, aiPlayer, rewardTracker, showThinking, aiDelay)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
 	return p

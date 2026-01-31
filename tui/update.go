@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/andrewsjg/goAdventure/advent"
+	"github.com/andrewsjg/goAdventure/ollama"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -227,6 +229,112 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	case aiTickMsg:
+		// AI tick - generate a command asynchronously
+		if m.aiEnabled && m.aiPlayer != nil && !m.game.GameOver {
+			// Set thinking state
+			m.aiIsThinking = true
+
+			// Track score before AI action for reward feedback
+			m.lastScore = m.game.GetScore()
+
+			// Build rich context for AI including reward feedback
+			ctx := &ollama.GameContext{
+				GameOutput:      m.game.Output,
+				LocationDesc:    m.game.GetLocationDescription(),
+				VisibleObjects:  m.game.GetVisibleObjects(),
+				Inventory:       m.game.InventoryDescriptions(),
+				Score:           m.game.GetScore(),
+				Turns:           int(m.game.Turns),
+				Hints:           m.game.GenerateHints(),
+				ValidActions:    m.game.GetAllVerbs(),
+				ValidDirections: m.game.GetAllDirections(),
+				ValidObjects:    m.game.GetInteractableObjects(),
+			}
+			if m.rewardTracker != nil {
+				ctx.RewardFeedback = m.rewardTracker.GetFeedback()
+			}
+
+			// Return both the AI call and spinner tick to keep spinner animating
+			aiCmd := func() tea.Msg {
+				cmd, thinking, err := m.aiPlayer.GetCommand(ctx)
+				return aiCommandMsg{command: cmd, thinking: thinking, err: err}
+			}
+			return m, tea.Batch(aiCmd, m.aiSpinner.Tick)
+		}
+
+	case spinner.TickMsg:
+		// Update the spinner animation
+		if m.aiIsThinking {
+			var cmd tea.Cmd
+			m.aiSpinner, cmd = m.aiSpinner.Update(msg)
+			return m, cmd
+		}
+
+	case aiCommandMsg:
+		// AI command response received - stop thinking indicator
+		m.aiIsThinking = false
+
+		if msg.err != nil {
+			m.content += fmt.Sprintf("\n[AI Error: %v]\n", msg.err)
+			m.gameOutput.SetContent(m.content)
+			m.gameOutput.GotoBottom()
+			return m, nil
+		}
+
+		// Show AI thinking if enabled
+		if m.showThinking && msg.thinking != "" {
+			m.aiThinking = msg.thinking
+			m.content += fmt.Sprintf("\n[AI Thinking: %s]\n", msg.thinking)
+		}
+
+		// Show the command being executed
+		m.content += "\n> " + msg.command + "\n"
+
+		// Track location before command to detect movement
+		locBefore := m.game.Loc
+
+		if m.game.QueryFlag {
+			// Handle query response from AI
+			m.game.QueryResponse = msg.command
+			m.game.QueryFlag = false
+			if m.game.OnQueryResponse != nil {
+				m.game.OnQueryResponse(m.game.QueryResponse, m.game)
+			}
+		} else {
+			// Process regular command
+			_ = m.game.ProcessCommand(msg.command)
+		}
+
+		// If location changed, record the command in move history
+		if m.game.Newloc != locBefore || m.game.Loc != locBefore {
+			m.moveHistory = append(m.moveHistory, msg.command)
+			if len(m.moveHistory) > maxMoveHistory {
+				m.moveHistory = m.moveHistory[1:]
+			}
+		}
+
+		// Add output
+		if m.game.Output != "" {
+			highlighted := highlightOutput(m.game.Output, m.game)
+			m.content += highlighted + "\n"
+			m.gameOutput.SetContent(m.content)
+			m.gameOutput.GotoBottom()
+			m.game.Output = ""
+		}
+
+		// Record reward for AI action
+		if m.rewardTracker != nil {
+			scoreAfter := m.game.GetScore()
+			died := m.game.GameOver
+			m.rewardTracker.RecordAction(msg.command, m.lastScore, scoreAfter, died)
+		}
+
+		// Schedule next AI command if game not over
+		if m.aiEnabled && !m.game.GameOver {
+			return m, aiTick(m.aiDelay)
+		}
+
 	default:
 		// No command to process yet
 		// Check for forced moves (but not during a query)
@@ -280,5 +388,21 @@ type scriptTickMsg struct{}
 func scriptTick() tea.Cmd {
 	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
 		return scriptTickMsg{}
+	})
+}
+
+// Message types for AI player
+type aiTickMsg struct{}
+
+type aiCommandMsg struct {
+	command  string
+	thinking string
+	err      error
+}
+
+// aiTick returns a command that triggers AI command generation after a delay
+func aiTick(delay time.Duration) tea.Cmd {
+	return tea.Tick(delay, func(t time.Time) tea.Msg {
+		return aiTickMsg{}
 	})
 }

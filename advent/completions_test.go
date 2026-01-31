@@ -148,3 +148,210 @@ func TestGetVisibleObjects(t *testing.T) {
 		// That's OK, nil means no visible objects
 	}
 }
+
+// TestStateCheckMethods tests the game state checking methods
+func TestStateCheckMethods(t *testing.T) {
+	game := NewGame(0, "", "", "", false, false, false, nil)
+
+	// At the start, player should be at the starting location (road), not the building
+	if !game.IsAtStart() {
+		t.Errorf("Game should start at LOC_START, Loc=%d, LOC_START=%d", game.Loc, dungeon.LOC_START)
+	}
+
+	// Player starts outside the cave
+	if game.IsInCave() {
+		t.Error("Player should not start in the cave")
+	}
+
+	// Player doesn't have items at start
+	if game.HasLamp() {
+		t.Error("Player should not have lamp at start")
+	}
+	if game.HasKeys() {
+		t.Error("Player should not have keys at start")
+	}
+}
+
+// TestCanSeeItems tests visibility checks for items
+func TestCanSeeItems(t *testing.T) {
+	game := NewGame(0, "", "", "", false, false, false, nil)
+
+	// Player starts at LOC_START (road), lamp and keys are at LOC_BUILDING
+	// So we can't see them from the starting location
+	if game.CanSeeLamp() {
+		t.Error("Should not see lamp at starting location (it's in the building)")
+	}
+	if game.CanSeeKeys() {
+		t.Error("Should not see keys at starting location (they're in the building)")
+	}
+
+	// Move to building and check again
+	game.Loc = int32(dungeon.LOC_BUILDING)
+	if !game.CanSeeLamp() {
+		t.Error("Should see lamp at building")
+	}
+	if !game.CanSeeKeys() {
+		t.Error("Should see keys at building")
+	}
+}
+
+// TestGenerateHintsWaitingForInstructions tests hint when game first starts
+func TestGenerateHintsWaitingForInstructions(t *testing.T) {
+	game := NewGame(0, "", "", "", false, false, false, nil)
+	// NewGame starts with Settings.NewGame = true
+
+	hints := game.GenerateHints()
+
+	// Should suggest answering N to instructions
+	if len(hints) == 0 {
+		t.Error("Should generate hint for instructions question")
+	}
+
+	foundNHint := false
+	for _, hint := range hints {
+		if contains(hint, "N") {
+			foundNHint = true
+			break
+		}
+	}
+	if !foundNHint {
+		t.Errorf("Should have hint to answer N, got hints: %v", hints)
+	}
+}
+
+// TestGenerateHintsAtStart tests hint generation at the starting location
+func TestGenerateHintsAtStart(t *testing.T) {
+	game := NewGame(0, "", "", "", false, false, false, nil)
+	game.Settings.NewGame = false // Past the instructions question
+
+	hints := game.GenerateHints()
+
+	// At the start without items, we should get a hint to go to the building
+	if len(hints) == 0 {
+		t.Error("Should generate hints at starting location")
+	}
+
+	// Should suggest going east to the building
+	foundEastHint := false
+	for _, hint := range hints {
+		if contains(hint, "EAST") {
+			foundEastHint = true
+			break
+		}
+	}
+	if !foundEastHint {
+		t.Errorf("Should have hint about EAST (go to building), got hints: %v", hints)
+	}
+}
+
+// TestGenerateHintsAtBuilding tests hint generation at the building
+func TestGenerateHintsAtBuilding(t *testing.T) {
+	game := NewGame(0, "", "", "", false, false, false, nil)
+	game.Settings.NewGame = false          // Past the instructions question
+	game.Loc = int32(dungeon.LOC_BUILDING) // Move to building
+
+	hints := game.GenerateHints()
+
+	// At the building without items, we should get hints to pick them up
+	if len(hints) == 0 {
+		t.Error("Should generate hints at building without items")
+	}
+
+	// Should suggest getting lamp
+	foundLampHint := false
+	for _, hint := range hints {
+		if contains(hint, "LAMP") {
+			foundLampHint = true
+			break
+		}
+	}
+	if !foundLampHint {
+		t.Errorf("Should have hint about LAMP, got hints: %v", hints)
+	}
+}
+
+// TestGenerateHintsWithItems tests that hints change after picking up items
+func TestGenerateHintsWithItems(t *testing.T) {
+	game := NewGame(0, "", "", "", false, false, false, nil)
+	game.Settings.NewGame = false // Past the instructions question
+
+	// Pick up lamp and keys
+	game.Objects[dungeon.LAMP].Place = -1 // -1 means carried
+	game.Objects[dungeon.KEYS].Place = -1
+
+	hints := game.GenerateHints()
+
+	// At starting location with lamp and keys, should suggest going south
+	foundSouthHint := false
+	for _, hint := range hints {
+		if contains(hint, "SOUTH") {
+			foundSouthHint = true
+			break
+		}
+	}
+	if !foundSouthHint {
+		t.Errorf("With lamp and keys at start, should have hint about SOUTH, got hints: %v", hints)
+	}
+}
+
+// TestGenerateHintsAtBuildingWithItems tests hints when player has items at building
+func TestGenerateHintsAtBuildingWithItems(t *testing.T) {
+	game := NewGame(0, "", "", "", false, false, false, nil)
+	game.Settings.NewGame = false // Past the instructions question
+	game.Loc = int32(dungeon.LOC_BUILDING)
+
+	// Pick up lamp, keys, food, and bottle (all items at building)
+	game.Objects[dungeon.LAMP].Place = -1
+	game.Objects[dungeon.KEYS].Place = -1
+	game.Objects[dungeon.FOOD].Place = -1
+	game.Objects[dungeon.BOTTLE].Place = -1
+
+	hints := game.GenerateHints()
+
+	// At building with all items, should suggest leaving west
+	foundWestHint := false
+	for _, hint := range hints {
+		if contains(hint, "WEST") {
+			foundWestHint = true
+			break
+		}
+	}
+	if !foundWestHint {
+		t.Errorf("With all items at building, should have hint about WEST, got hints: %v", hints)
+	}
+}
+
+// TestGenerateHintsAtBuildingWithSomeItems tests hints when only some items picked up
+func TestGenerateHintsAtBuildingWithSomeItems(t *testing.T) {
+	game := NewGame(0, "", "", "", false, false, false, nil)
+	game.Settings.NewGame = false // Past the instructions question
+	game.Loc = int32(dungeon.LOC_BUILDING)
+
+	// Pick up lamp and keys, but leave food and bottle
+	game.Objects[dungeon.LAMP].Place = -1
+	game.Objects[dungeon.KEYS].Place = -1
+
+	hints := game.GenerateHints()
+
+	// Should still suggest getting food/bottle before leaving
+	foundFoodOrBottleHint := false
+	for _, hint := range hints {
+		if contains(hint, "FOOD") || contains(hint, "BOTTLE") {
+			foundFoodOrBottleHint = true
+			break
+		}
+	}
+	if !foundFoodOrBottleHint {
+		t.Errorf("With some items remaining, should suggest getting FOOD or BOTTLE, got hints: %v", hints)
+	}
+}
+
+// Helper function for string contains
+func contains(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
