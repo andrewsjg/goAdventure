@@ -38,12 +38,51 @@ archives:
       - goos: windows
         formats: [zip]
 
+
 changelog:
   sort: asc
   filters:
     exclude:
       - "^docs:"
       - "^test:"
+
+homebrew_casks:
+  - name: goAdventure
+
+    # Binaries to install
+    binaries:
+      - goAdventure
+
+    # Repository to push the cask to
+    repository:
+      owner: andrewsjg
+      name: tap
+      # Optionally use a deploy token instead of GITHUB_TOKEN
+      # token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+
+    # Folder inside the repository to put the cask
+    directory: Casks
+
+    # Git author for commits
+    commit_author:
+      name: goreleaserbot
+      email: bot@jgandrews.com
+
+    # Caveats for the user
+    caveats: |
+      Colossal Cave Adventure - the classic text adventure game!
+
+      Run with: goAdventure
+      Run with AI player: goAdventure -ai
+
+    # Your app's homepage
+    homepage: "https://github.com/andrewsjg/goAdventure"
+
+    # Your app's description
+    description: "A Go implementation of the classic Colossal Cave Adventure text adventure game"
+
+    # Skip upload if this is a pre-release
+    skip_upload: auto
 
 release:
   footer: >-
