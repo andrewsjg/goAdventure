@@ -7,7 +7,9 @@ This implementation of Colossal Cave Adventure was created to explore the origin
 
 This Go implementation stays faithful to the original but adds some 'modern' affordance's, like a terminal user interface (TUI) for those that want it.  Additionally, for a bit of fun, the game includes [OpenTelemetry Tracing](https://opentelemetry.io/docs/concepts/signals/traces/) which allows the player to 'trace' their journey through the game.
 
-There is an accompanying Blog Post (coming soon) about wh and how this was created.
+There is an accompanying [Blog Post](https://jgandrews.com/posts/colossal-cave/) about what this is and how this was created.
+
+![Adventure TUI](images/advent-tui.png)
 
 ## Installation
 
